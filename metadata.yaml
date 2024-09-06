@@ -1,4 +1,6 @@
 homepage: "https://stape.io/"
 versions:
+  - sha: 83c27561e1b20bd091be0b4f2106f8bdd007eafa
+    changeNotes: Fix requests with empty cache.
   - sha: 6d27611a9bf540947ba223b7381b59a9edfc5b3d
     changeNotes: Initial release.
