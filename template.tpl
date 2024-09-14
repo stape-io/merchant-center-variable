@@ -295,6 +295,7 @@ const getGoogleAuth = require('getGoogleAuth');
 const getRequestHeader = require('getRequestHeader');
 const getContainerVersion = require('getContainerVersion');
 const encodeUriComponent = require('encodeUriComponent');
+const getType = require('getType');
 
 const isLoggingEnabled = determinateIsLoggingEnabled();
 const traceId = isLoggingEnabled ? getRequestHeader('trace-id') : undefined;
@@ -305,23 +306,18 @@ let items = data.items;
 
 if (!items) return undefined;
 
-return Promise.all(
-  items.map((item) => {
-    return getData(item);
-  })
-).then((results) => {
-  return results;
-});
+return Promise.all(items.map(getData));
 
 function getData(item) {
-  if (templateDataStorage.getItemCopy(feed_identifier + item.item_id) &&
-    templateDataStorage.getItemCopy(feed_identifier + item.item_id).ts + cache > getTimestampMillis() ) {
-    mapResult(item, templateDataStorage.getItemCopy(feed_identifier + item.item_id));
+  const storageKey = feed_identifier + item.item_id;
+  const cachedItem = templateDataStorage.getItemCopy(storageKey);
+  if (cachedItem && cachedItem.ts + cache > getTimestampMillis() ) {
+    mapResult(item, cachedItem);
 
     return item;
   }
 
-  let url = 'https://shoppingcontent.googleapis.com/content/v2.1/' + enc(data.merchant_center_id) + '/products/online:' + enc(data.feed_language) + ':' + enc(data.feed_label) + ':' + enc(item.item_id);
+  const url = 'https://shoppingcontent.googleapis.com/content/v2.1/' + enc(data.merchant_center_id) + '/products/online:' + enc(data.feed_language) + ':' + enc(data.feed_label) + ':' + enc(item.item_id);
 
   if (isLoggingEnabled) {
     logToConsole(
@@ -340,7 +336,7 @@ function getData(item) {
     scopes: ['https://www.googleapis.com/auth/content']
   });
 
-  sendHttpRequest(url, { method: 'GET', authorization: auth })
+  return sendHttpRequest(url, { method: 'GET', authorization: auth })
     .then((successResult) => {
       if (isLoggingEnabled) {
         logToConsole(
@@ -359,7 +355,7 @@ function getData(item) {
       let result_data = JSON.parse(successResult.body);
 
       result_data.ts = getTimestampMillis();
-      templateDataStorage.setItemCopy(feed_identifier + item.item_id, result_data);
+      templateDataStorage.setItemCopy(storageKey, result_data);
       mapResult(item, result_data);
 
       return item;
@@ -384,18 +380,8 @@ function getData(item) {
 
 // function to ignore and map result
 function mapResult(item, result_data) {
-
-  for (let i in data.mapping_basic) {
-    if (result_data[data.mapping_basic[i].merchant_center_letiable]) {
-      item[data.mapping_basic[i].item_letiable] = result_data[data.mapping_basic[i].merchant_center_letiable];
-    }
-  }
-
-  for (let x in data.mapping_custom) {
-    if (result_data[data.mapping_custom[x].merchant_center_letiable]) {
-      item[data.mapping_custom[x].item_letiable] = result_data[data.mapping_custom[x].merchant_center_letiable];
-    }
-  }
+  mapResultVariables(item, result_data, data.mapping_basic);
+  mapResultVariables(item, result_data, data.mapping_custom);
 
   if (data.map_categories && result_data.productTypes ) {
     for (let z = 0; z < result_data.productTypes.length; z++) {
@@ -409,6 +395,15 @@ function mapResult(item, result_data) {
   }
 
   return item;
+}
+
+function mapResultVariables(item, result_data, mapping) {
+  if(getType(mapping) !== 'array') return;
+  for (let i = 0; i < mapping.length; i++) {
+    const mappingItem = mapping[i];
+    const value = result_data[mappingItem.merchant_center_variable];
+    if (value) item[mappingItem.item_variable] = value;
+  }
 }
 
 function determinateIsLoggingEnabled() {
