@@ -1,6 +1,6 @@
 # Merchant Center Variable for Google Tag Manager Server Container
 
-TBD
+This variable allows you to retrieve product information from Google Merchant Center.
 
 ## Open Source
 
