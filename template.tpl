@@ -13,7 +13,7 @@ ___INFO___
   "id": "cvt_temp_public_id",
   "version": 1,
   "securityGroups": [],
-  "displayName": "Merchant Center Lookup",
+  "displayName": "Merchant Center Lookup by Stape",
   "description": "This variable allows you to retrieve product information from Google Merchant Center.",
   "containerContexts": [
     "SERVER"
