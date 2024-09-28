@@ -1,5 +1,7 @@
 homepage: "https://stape.io/"
 versions:
+  - sha: 7b015ccf9d048d0c41f60ec27cae8d23cdc136e4
+    changeNotes: Tag rename.
   - sha: 7738133a4e278a109625644c1d650ee70643199d
     changeNotes: Tag rename.
   - sha: 83c27561e1b20bd091be0b4f2106f8bdd007eafa
