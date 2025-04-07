@@ -12,4 +12,4 @@ It's especially useful for adding product details like categories or attributes 
 
 Initial development was done by [Lars Friis](https://www.linkedin.com/in/lars-friis/).
 
-The **Google Merchant Center Lookup** for GTM Server is developed and maintained by the [Stape Team](https://stape.io/) under the Apache 2.0 license.
+The **Google Merchant Center Lookup** variable for GTM Server is developed and maintained by the [Stape Team](https://stape.io/) under the Apache 2.0 license.
