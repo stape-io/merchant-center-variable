@@ -1,5 +1,8 @@
 homepage: "https://stape.io/"
+documentation: "https://github.com/stape-io/merchant-center-variable"
 versions:
+  - sha: 4a47c19ffd2ccf77c38a6947c23119963a851340
+    changeNotes: Add Custom ID key field option. Add tests.
   - sha: 7b015ccf9d048d0c41f60ec27cae8d23cdc136e4
     changeNotes: Tag rename.
   - sha: 7738133a4e278a109625644c1d650ee70643199d
