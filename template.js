@@ -11,27 +11,43 @@ const getContainerVersion = require('getContainerVersion');
 const encodeUriComponent = require('encodeUriComponent');
 const getType = require('getType');
 
+/*==============================================================================
+==============================================================================*/
+
 const isLoggingEnabled = determinateIsLoggingEnabled();
 const traceId = isLoggingEnabled ? getRequestHeader('trace-id') : undefined;
 
 const cache = makeNumber(data.cache) * 60 * 60 * 1000;
 const feed_identifier = data.feed_language + '_' + data.feed_label;
-let items = data.items;
+const itemIdKey = data.itemIdKey ? data.itemIdKey : 'item_id';
 
-if (!items) return undefined;
+const items = data.items;
+
+if (getType(items) !== 'array') return undefined;
 
 return Promise.all(items.map(getData));
 
-function getData(item) {
-  const storageKey = feed_identifier + item.item_id;
-  const cachedItem = templateDataStorage.getItemCopy(storageKey);
-  if (cachedItem && cachedItem.ts + cache > getTimestampMillis() ) {
-    mapResult(item, cachedItem);
+/*==============================================================================
+  Vendor related functions
+==============================================================================*/
 
+function getData(item) {
+  const storageKey = feed_identifier + item[itemIdKey];
+  const cachedItem = templateDataStorage.getItemCopy(storageKey);
+  if (cachedItem && cachedItem.ts + cache > getTimestampMillis()) {
+    mapResult(item, cachedItem);
     return item;
   }
 
-  const url = 'https://shoppingcontent.googleapis.com/content/v2.1/' + enc(data.merchant_center_id) + '/products/online:' + enc(data.feed_language) + ':' + enc(data.feed_label) + ':' + enc(item.item_id);
+  const url =
+    'https://shoppingcontent.googleapis.com/content/v2.1/' +
+    enc(data.merchant_center_id) +
+    '/products/online:' +
+    enc(data.feed_language) +
+    ':' +
+    enc(data.feed_label) +
+    ':' +
+    enc(item[itemIdKey]);
 
   if (isLoggingEnabled) {
     logToConsole(
@@ -41,7 +57,7 @@ function getData(item) {
         TraceId: traceId,
         EventName: 'LookupRequest',
         RequestMethod: 'GET',
-        RequestUrl: url,
+        RequestUrl: url
       })
     );
   }
@@ -50,8 +66,8 @@ function getData(item) {
     scopes: ['https://www.googleapis.com/auth/content']
   });
 
-  return sendHttpRequest(url, { method: 'GET', authorization: auth })
-    .then((successResult) => {
+  return sendHttpRequest(url, { method: 'GET', authorization: auth }).then(
+    (result) => {
       if (isLoggingEnabled) {
         logToConsole(
           JSON.stringify({
@@ -59,60 +75,58 @@ function getData(item) {
             Type: 'Response',
             TraceId: traceId,
             EventName: 'LookupRequest',
-            ResponseStatusCode: successResult.statusCode,
-            ResponseHeaders: successResult.headers,
-            ResponseBody: successResult.body,
+            ResponseStatusCode: result.statusCode,
+            ResponseHeaders: result.headers,
+            ResponseBody: result.body
           })
         );
       }
 
-      let result_data = JSON.parse(successResult.body);
-
-      result_data.ts = getTimestampMillis();
-      templateDataStorage.setItemCopy(storageKey, result_data);
-      mapResult(item, result_data);
+      if (result.statusCode >= 200 && result.statusCode < 300) {
+        const result_data = JSON.parse(result.body);
+        result_data.ts = getTimestampMillis();
+        templateDataStorage.setItemCopy(storageKey, result_data);
+        mapResult(item, result_data);
+      }
 
       return item;
-    }, function() {
+    },
+    (result) => {
       if (isLoggingEnabled) {
         logToConsole(
           JSON.stringify({
             Name: 'GoogleMerchantCenterLookup',
-            Type: 'Response',
+            Type: 'Message',
             TraceId: traceId,
             EventName: 'LookupRequest',
-            ResponseStatusCode: 500,
-            ResponseHeaders: {},
-            ResponseBody: {},
+            Message: 'Some request may have failed or timed out.',
+            Reason: JSON.stringify(result)
           })
         );
       }
 
       return item;
-    });
+    }
+  );
 }
 
-// function to ignore and map result
 function mapResult(item, result_data) {
   mapResultVariables(item, result_data, data.mapping_basic);
   mapResultVariables(item, result_data, data.mapping_custom);
 
-  if (data.map_categories && result_data.productTypes ) {
-    for (let z = 0; z < result_data.productTypes.length; z++) {
-      if (z === 0) {
-        item.item_category = result_data.productTypes[0];
-      }
-      else {
-        item['item_category' + z] = result_data.productTypes[z];
-      }
-    }
+  if (data.map_categories && result_data.productTypes) {
+    result_data.productTypes.forEach((productType, index) => {
+      const itemCategoryIndex = index !== 0 ? index : '';
+      item['item_category' + itemCategoryIndex] = productType;
+    });
   }
 
   return item;
 }
 
 function mapResultVariables(item, result_data, mapping) {
-  if(getType(mapping) !== 'array') return;
+  if (getType(mapping) !== 'array') return;
+
   for (let i = 0; i < mapping.length; i++) {
     const mappingItem = mapping[i];
     const value = result_data[mappingItem.merchant_center_variable];
@@ -120,9 +134,16 @@ function mapResultVariables(item, result_data, mapping) {
   }
 }
 
+/*==============================================================================
+  Helpers
+==============================================================================*/
+
 function determinateIsLoggingEnabled() {
   const containerVersion = getContainerVersion();
-  const isDebug = !!(containerVersion && (containerVersion.debugMode || containerVersion.previewMode));
+  const isDebug = !!(
+    containerVersion &&
+    (containerVersion.debugMode || containerVersion.previewMode)
+  );
 
   if (!data.logType) {
     return isDebug;
@@ -140,7 +161,5 @@ function determinateIsLoggingEnabled() {
 }
 
 function enc(data) {
-  data = data || '';
-  return encodeUriComponent(data);
+  return encodeUriComponent(data || '');
 }
-
