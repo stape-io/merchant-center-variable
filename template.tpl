@@ -101,6 +101,13 @@ ___TEMPLATE_PARAMETERS___
         "checkboxText": "Map product_types into item_categories",
         "simpleValueType": true,
         "help": "If checked, this option maps the \u003ci\u003eproduct_type\u003c/i\u003e in the Merchant Center to the \u003ci\u003eitem_category\u003c/i\u003e field."
+      },
+      {
+        "type": "CHECKBOX",
+        "name": "enable_item_match_status",
+        "checkboxText": "Add item match status property",
+        "simpleValueType": true,
+        "help": "Adds the property \u003cb\u003emerchant_center_status\u003c/b\u003e to each product in the Items Array. It returns\u003c/br\u003e\n\u003cul\u003e\n\u003cli\u003e\u003cb\u003ematch\u003c/b\u003e: The item was found in your catalogue.\u003c/li\u003e\n\u003cli\u003e\u003cb\u003eno_match\u003c/b\u003e:  The item was not found in your catalogue.\u003c/li\u003e\n\u003cli\u003e\u003cb\u003eapi_fail\u003c/b\u003e: There was a problem in the API call.\u003c/li\u003e\n\u003c/ul\u003e"
       }
     ]
   },
@@ -311,34 +318,101 @@ ___TEMPLATE_PARAMETERS___
         "defaultValue": "debug"
       }
     ]
+  },
+  {
+    "displayName": "BigQuery Logs Settings",
+    "name": "bigQueryLogsGroup",
+    "groupStyle": "ZIPPY_CLOSED",
+    "type": "GROUP",
+    "subParams": [
+      {
+        "type": "RADIO",
+        "name": "bigQueryLogType",
+        "radioItems": [
+          {
+            "value": "no",
+            "displayValue": "Do not log to BigQuery"
+          },
+          {
+            "value": "always",
+            "displayValue": "Log to BigQuery"
+          }
+        ],
+        "simpleValueType": true,
+        "defaultValue": "no"
+      },
+      {
+        "type": "GROUP",
+        "name": "logsBigQueryConfigGroup",
+        "groupStyle": "NO_ZIPPY",
+        "subParams": [
+          {
+            "type": "TEXT",
+            "name": "logBigQueryProjectId",
+            "displayName": "BigQuery Project ID",
+            "simpleValueType": true,
+            "help": "Optional. \u003cbr\u003e\u003cbr\u003e  If omitted, it will be retrieved from the environment variable \u003cI\u003eGOOGLE_CLOUD_PROJECT\u003c/i\u003e where the server container is running. If the server container is running on Google Cloud, \u003cI\u003eGOOGLE_CLOUD_PROJECT\u003c/i\u003e will already be set to the Google Cloud project\u0027s ID."
+          },
+          {
+            "type": "TEXT",
+            "name": "logBigQueryDatasetId",
+            "displayName": "BigQuery Dataset ID",
+            "simpleValueType": true,
+            "valueValidators": [
+              {
+                "type": "NON_EMPTY"
+              }
+            ]
+          },
+          {
+            "type": "TEXT",
+            "name": "logBigQueryTableId",
+            "displayName": "BigQuery Table ID",
+            "simpleValueType": true,
+            "valueValidators": [
+              {
+                "type": "NON_EMPTY"
+              }
+            ]
+          }
+        ],
+        "enablingConditions": [
+          {
+            "paramName": "bigQueryLogType",
+            "paramValue": "always",
+            "type": "EQUALS"
+          }
+        ]
+      }
+    ]
   }
 ]
 
 
 ___SANDBOXED_JS_FOR_SERVER___
 
-const Promise = require('Promise');
-const logToConsole = require('logToConsole');
-const templateDataStorage = require('templateDataStorage');
-const makeNumber = require('makeNumber');
-const JSON = require('JSON');
-const getTimestampMillis = require('getTimestampMillis');
-const sendHttpRequest = require('sendHttpRequest');
+const BigQuery = require('BigQuery');
+const encodeUriComponent = require('encodeUriComponent');
+const getContainerVersion = require('getContainerVersion');
 const getGoogleAuth = require('getGoogleAuth');
 const getRequestHeader = require('getRequestHeader');
-const getContainerVersion = require('getContainerVersion');
-const encodeUriComponent = require('encodeUriComponent');
+const getTimestampMillis = require('getTimestampMillis');
 const getType = require('getType');
+const JSON = require('JSON');
+const logToConsole = require('logToConsole');
+const makeNumber = require('makeNumber');
+const makeString = require('makeString');
+const Promise = require('Promise');
+const sendHttpRequest = require('sendHttpRequest');
+const templateDataStorage = require('templateDataStorage');
 
 /*==============================================================================
 ==============================================================================*/
 
-const isLoggingEnabled = determinateIsLoggingEnabled();
-const traceId = isLoggingEnabled ? getRequestHeader('trace-id') : undefined;
-
 const cache = makeNumber(data.cache) * 60 * 60 * 1000;
 const feed_identifier = data.feed_language + '_' + data.feed_label;
 const itemIdKey = data.itemIdKey ? data.itemIdKey : 'item_id';
+const enableItemMatchStatus = data.enable_item_match_status;
 
 const items = data.items;
 
@@ -368,18 +442,13 @@ function getData(item) {
     ':' +
     enc(item[itemIdKey]);
 
-  if (isLoggingEnabled) {
-    logToConsole(
-      JSON.stringify({
-        Name: 'GoogleMerchantCenterLookup',
-        Type: 'Request',
-        TraceId: traceId,
-        EventName: 'LookupRequest',
-        RequestMethod: 'GET',
-        RequestUrl: url
-      })
-    );
-  }
+  log({
+    Name: 'GoogleMerchantCenterLookup',
+    Type: 'Request',
+    EventName: 'LookupRequest',
+    RequestMethod: 'GET',
+    RequestUrl: url
+  });
 
   const auth = getGoogleAuth({
     scopes: ['https://www.googleapis.com/auth/content']
@@ -387,43 +456,36 @@ function getData(item) {
 
   return sendHttpRequest(url, { method: 'GET', authorization: auth }).then(
     (result) => {
-      if (isLoggingEnabled) {
-        logToConsole(
-          JSON.stringify({
-            Name: 'GoogleMerchantCenterLookup',
-            Type: 'Response',
-            TraceId: traceId,
-            EventName: 'LookupRequest',
-            ResponseStatusCode: result.statusCode,
-            ResponseHeaders: result.headers,
-            ResponseBody: result.body
-          })
-        );
-      }
-
+      log({
+        Name: 'GoogleMerchantCenterLookup',
+        Type: 'Response',
+        EventName: 'LookupRequest',
+        ResponseStatusCode: result.statusCode,
+        ResponseHeaders: result.headers,
+        ResponseBody: result.body
+      });
+      const result_data = JSON.parse(result.body || '{}');
       if (result.statusCode >= 200 && result.statusCode < 300) {
-        const result_data = JSON.parse(result.body);
+        if (enableItemMatchStatus) item.merchant_center_status = 'match';
         result_data.ts = getTimestampMillis();
         templateDataStorage.setItemCopy(storageKey, result_data);
         mapResult(item, result_data);
+      } else if (result.statusCode === 404) {
+        if (enableItemMatchStatus) item.merchant_center_status = 'no_match';
+      } else {
+        if (enableItemMatchStatus) item.merchant_center_status = 'api_error';
       }
-
       return item;
     },
     (result) => {
-      if (isLoggingEnabled) {
-        logToConsole(
-          JSON.stringify({
-            Name: 'GoogleMerchantCenterLookup',
-            Type: 'Message',
-            TraceId: traceId,
-            EventName: 'LookupRequest',
-            Message: 'Some request may have failed or timed out.',
-            Reason: JSON.stringify(result)
-          })
-        );
-      }
-
+      log({
+        Name: 'GoogleMerchantCenterLookup',
+        Type: 'Message',
+        EventName: 'LookupRequest',
+        Message: 'Some request may have failed or timed out.',
+        Reason: JSON.stringify(result)
+      });
+      if (enableItemMatchStatus) item.merchant_center_status = 'api_error';
       return item;
     }
   );
@@ -435,7 +497,7 @@ function mapResult(item, result_data) {
 
   if (data.map_categories && result_data.productTypes) {
     result_data.productTypes.forEach((productType, index) => {
-      const itemCategoryIndex = index !== 0 ? index : '';
+      const itemCategoryIndex = index !== 0 ? index + 1 : '';
       item['item_category' + itemCategoryIndex] = productType;
     });
   }
@@ -456,6 +518,65 @@ function mapResultVariables(item, result_data, mapping) {
 /*==============================================================================
   Helpers
 ==============================================================================*/
+
+function log(rawDataToLog) {
+  const logDestinationsHandlers = {};
+  if (determinateIsLoggingEnabled()) logDestinationsHandlers.console = logConsole;
+  if (determinateIsLoggingEnabledForBigQuery()) logDestinationsHandlers.bigQuery = logToBigQuery;
+
+  rawDataToLog.TraceId = getRequestHeader('trace-id');
+
+  const keyMappings = {
+    // No transformation for Console is needed.
+    bigQuery: {
+      Name: 'tag_name',
+      Type: 'type',
+      TraceId: 'trace_id',
+      EventName: 'event_name',
+      RequestMethod: 'request_method',
+      RequestUrl: 'request_url',
+      RequestBody: 'request_body',
+      ResponseStatusCode: 'response_status_code',
+      ResponseHeaders: 'response_headers',
+      ResponseBody: 'response_body'
+    }
+  };
+
+  for (const logDestination in logDestinationsHandlers) {
+    const handler = logDestinationsHandlers[logDestination];
+    if (!handler) continue;
+
+    const mapping = keyMappings[logDestination];
+    const dataToLog = mapping ? {} : rawDataToLog;
+
+    if (mapping) {
+      for (const key in rawDataToLog) {
+        const mappedKey = mapping[key] || key;
+        dataToLog[mappedKey] = rawDataToLog[key];
+      }
+    }
+
+    handler(dataToLog);
+  }
+}
+
+function logConsole(dataToLog) {
+  logToConsole(JSON.stringify(dataToLog));
+}
+
+function logToBigQuery(dataToLog) {
+  const connectionInfo = {
+    projectId: data.logBigQueryProjectId,
+    datasetId: data.logBigQueryDatasetId,
+    tableId: data.logBigQueryTableId
+  };
+  dataToLog.timestamp = getTimestampMillis();
+
+  ['request_body', 'response_headers', 'response_body'].forEach((p) => {
+    dataToLog[p] = JSON.stringify(dataToLog[p]);
+  });
+  BigQuery.insert(connectionInfo, [dataToLog], { ignoreUnknownValues: true });
+}
 
 function determinateIsLoggingEnabled() {
   const containerVersion = getContainerVersion();
@@ -479,8 +600,14 @@ function determinateIsLoggingEnabled() {
   return data.logType === 'always';
 }
 
+function determinateIsLoggingEnabledForBigQuery() {
+  if (data.bigQueryLogType === 'no') return false;
+  return data.bigQueryLogType === 'always';
+}
+
 function enc(data) {
-  return encodeUriComponent(data || '');
+  if (['null', 'undefined'].indexOf(getType(data)) !== -1) data = '';
+  return encodeUriComponent(makeString(data));
 }
 
 
@@ -658,6 +785,67 @@ ___SERVER_PERMISSIONS___
       "isEditedByUser": true
     },
     "isRequired": true
+  },
+  {
+    "instance": {
+      "key": {
+        "publicId": "access_bigquery",
+        "versionId": "1"
+      },
+      "param": [
+        {
+          "key": "allowedTables",
+          "value": {
+            "type": 2,
+            "listItem": [
+              {
+                "type": 3,
+                "mapKey": [
+                  {
+                    "type": 1,
+                    "string": "projectId"
+                  },
+                  {
+                    "type": 1,
+                    "string": "datasetId"
+                  },
+                  {
+                    "type": 1,
+                    "string": "tableId"
+                  },
+                  {
+                    "type": 1,
+                    "string": "operation"
+                  }
+                ],
+                "mapValue": [
+                  {
+                    "type": 1,
+                    "string": "*"
+                  },
+                  {
+                    "type": 1,
+                    "string": "*"
+                  },
+                  {
+                    "type": 1,
+                    "string": "*"
+                  },
+                  {
+                    "type": 1,
+                    "string": "write"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "clientAnnotations": {
+      "isEditedByUser": true
+    },
+    "isRequired": true
   }
 ]
 
@@ -682,67 +870,45 @@ scenarios:
     });\n\n"
 - name: Items Array is modified when the Item ID matches the Item ID in Merchant Center
     (when NOT using a Custom Item ID Key)
-  code: |-
-    mockData.map_categories = true;
-    mockData.mapping_basic = [ { merchant_center_variable : 'title', item_variable: 'product_type'} ];
-    mockData.mapping_custom = [ { merchant_center_variable : 'description', item_variable: 'description'} ];
-
-    setSendHttpRequest();
-
-    runCode(mockData).then(variableResult => {
-      assertThat(variableResult).isEqualTo([
-        {
-          item_id: '123',
-          item_sku: 'abc',
-          price: 1,
-          product_type: 'produtinho maravilhoso para voce123',
-          description:
-            'test testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest test',
-          item_category: 'Garden furniture'
-        },
-        {
-          item_id: '456',
-          item_sku: 'def',
-          price: 2.99,
-          product_type: 'produtinho maravilhoso para voce456',
-          description:
-            'test testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest test',
-          item_category: 'Garden furniture'
-        }
-      ]);
-    });
+  code: "mockData.map_categories = true;\nmockData.mapping_basic = [ { merchant_center_variable\
+    \ : 'title', item_variable: 'product_type'} ];\nmockData.mapping_custom = [ {\
+    \ merchant_center_variable : 'description', item_variable: 'description'} ];\n\
+    \nsetSendHttpRequest();\n\nrunCode(mockData).then(variableResult => {\n  assertThat(variableResult).isEqualTo([\n\
+    \    {\n      item_id: '123',\n      item_sku: 'abc',\n      price: 1,\n     \
+    \ product_type: 'produtinho maravilhoso para voce123',\n      description:\n \
+    \       'test testtest testtest testtest testtest testtest testtest testtest testtest\
+    \ testtest testtest testtest testtest testtest testtest testtest test',\n    \
+    \  item_category: 'Garden furniture'\n    },\n    {\n      item_id: '456',\n \
+    \     item_sku: 'def',\n      price: 2.99,\n      product_type: 'produtinho maravilhoso\
+    \ para voce456',\n      description:\n        'test testtest testtest testtest\
+    \ testtest testtest testtest testtest testtest testtest testtest testtest testtest\
+    \ testtest testtest testtest test',\n      item_category: 'Garden furniture'\n\
+    \    },\n    { \n      item_id: '789', \n      item_sku: 'ghi', \n      price:\
+    \ 3.5, \n      product_type: 'produtinho maravilhoso para voce789',\n      description:\n\
+    \        'test testtest testtest testtest testtest testtest testtest testtest\
+    \ testtest testtest testtest testtest testtest testtest testtest testtest test',\n\
+    \      item_category: 'Garden furniture' \n    }]);\n});"
 - name: Items Array is modified when the Item ID matches the Item ID in Merchant Center
     (when using a Custom Item ID Key)
-  code: |-
-    mockData.itemIdKey = 'item_sku';
-    mockData.map_categories = true;
-    mockData.mapping_basic = [ { merchant_center_variable : 'title', item_variable: 'product_type'} ];
-    mockData.mapping_custom = [ { merchant_center_variable : 'description', item_variable: 'description'} ];
-
-    setSendHttpRequest();
-
-    runCode(mockData).then(variableResult => {
-      assertThat(variableResult).isEqualTo([
-        {
-          item_id: '123',
-          item_sku: 'abc',
-          price: 1,
-          product_type: 'produtinho maravilhoso para voceabc',
-          description:
-            'test testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest test',
-          item_category: 'Garden furniture'
-        },
-        {
-          item_id: '456',
-          item_sku: 'def',
-          price: 2.99,
-          product_type: 'produtinho maravilhoso para vocedef',
-          description:
-            'test testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest test',
-          item_category: 'Garden furniture'
-        }
-      ]);
-    });
+  code: "mockData.itemIdKey = 'item_sku';\nmockData.map_categories = true;\nmockData.mapping_basic\
+    \ = [ { merchant_center_variable : 'title', item_variable: 'product_type'} ];\n\
+    mockData.mapping_custom = [ { merchant_center_variable : 'description', item_variable:\
+    \ 'description'} ];\n\nsetSendHttpRequest();\n\nrunCode(mockData).then(variableResult\
+    \ => {\n  assertThat(variableResult).isEqualTo([\n    {\n      item_id: '123',\n\
+    \      item_sku: 'abc',\n      price: 1,\n      product_type: 'produtinho maravilhoso\
+    \ para voceabc',\n      description:\n        'test testtest testtest testtest\
+    \ testtest testtest testtest testtest testtest testtest testtest testtest testtest\
+    \ testtest testtest testtest test',\n      item_category: 'Garden furniture'\n\
+    \    },\n    {\n      item_id: '456',\n      item_sku: 'def',\n      price: 2.99,\n\
+    \      product_type: 'produtinho maravilhoso para vocedef',\n      description:\n\
+    \        'test testtest testtest testtest testtest testtest testtest testtest\
+    \ testtest testtest testtest testtest testtest testtest testtest testtest test',\n\
+    \      item_category: 'Garden furniture'\n    },{ \n      item_id: '789', \n \
+    \     item_sku: 'ghi', \n      price: 3.5, \n      product_type: 'produtinho maravilhoso\
+    \ para voceghi',\n      description:\n        'test testtest testtest testtest\
+    \ testtest testtest testtest testtest testtest testtest testtest testtest testtest\
+    \ testtest testtest testtest test',\n      item_category: 'Garden furniture' \n\
+    \    }\n  ]);\n});"
 - name: Items Array is NOT modified when the Item ID does NOT match the Item ID in
     Merchant Center
   code: |
@@ -755,8 +921,9 @@ scenarios:
 
     runCode(mockData).then(variableResult => {
       assertThat(variableResult).isEqualTo([
-        { item_id: '123', item_sku: 'abc', price: 1 },
-        { item_id: '456', item_sku: 'def', price: 2.99 }
+        { item_id: '123', item_sku: 'abc', price: 1},
+        { item_id: '456', item_sku: 'def', price: 2.99},
+        { item_id: '789', item_sku: 'ghi', price: 3.5 }
       ]);
     });
 - name: Items Array is NOT modified when a request promise rejects
@@ -774,41 +941,64 @@ scenarios:
 
     runCode(mockData).then(variableResult => {
       assertThat(variableResult).isEqualTo([
-        { item_id: '123', item_sku: 'abc', price: 1 },
-        { item_id: '456', item_sku: 'def', price: 2.99 }
+        { item_id: '123', item_sku: 'abc', price: 1},
+        { item_id: '456', item_sku: 'def', price: 2.99},
+        { item_id: '789', item_sku: 'ghi', price: 3.5 }
       ]);
     });
+- name: Items Array is modified when find a match AND is NOT enriched with 'merchant_center_status'
+    when NOT enabled
+  code: "runCode(mockData).then(variableResult => {\n  variableResult.forEach( item\
+    \ => {\n  assertThat(item.merchant_center_status).isUndefined(); \n  });\n});\n"
+- name: Items Array is modified when finds a match AND is enriched with correct 'merchant_center_status'
+    when enabled
+  code: "mockData.enable_item_match_status = true;\n\nrunCode(mockData).then(variableResult\
+    \ => {\n  variableResult.forEach( item => {\n  assertThat(item.merchant_center_status).isEqualTo(\"\
+    match\"); \n  });\n});\n"
+- name: Items Array is enriched with correct 'merchant_center_status' when enabled
+  code: "mockData.enable_item_match_status = true;\n\nlet index = 0;\n\nmock('sendHttpRequest',\
+    \ (requestUrl, requestOptions, requestBody) => {\n    let response;\n\n    if\
+    \ (index === 0) response = getNoMatchResponse();\n    else if (index === 1) response\
+    \ = getMatchResponse();\n    else if (index === 2) return Promise.create((resolve,reject)\
+    \ => reject()); \n    \n    index++;\n\n    return Promise.create((resolve, reject)\
+    \ => {\n      resolve({\n        statusCode: response.statusCode,\n        body:\
+    \ JSON.stringify(response.body)\n      });\n    });\n  });\n\nrunCode(mockData).then(variableResult\
+    \ => {\n  assertThat(variableResult[0].merchant_center_status).isEqualTo('no_match');\n\
+    \  assertThat(variableResult[1].merchant_center_status).isEqualTo('match');\n\
+    \  assertThat(variableResult[2].merchant_center_status).isEqualTo('api_error');\n\
+    });\n\n"
 setup: "const encodeUriComponent = require('encodeUriComponent');\nconst Promise =\
   \ require('Promise');\nconst JSON = require('JSON');\n\nconst enc = (data) => {\n\
   \  return encodeUriComponent(data || '');\n};\n\nconst mockData = {\n  items: [{\
-  \ item_id: '123', item_sku: 'abc', price: 1 }, { item_id: '456', item_sku: 'def',\
-  \ price: 2.99 }],\n  cache: '12',\n  merchant_center_id: '1111111111',\n  feed_language:\
-  \ 'en',\n  feed_label: 'BR'\n};\n\n\nconst getNoMatchResponse = () => {\n  return\
-  \ {\n    statusCode: 404,\n    body: {\n      error: {\n        code: 404,\n   \
-  \     message: 'item not found',\n        errors: [\n          {\n            message:\
-  \ 'item not found',\n            domain: 'global',\n            reason: 'notFound'\n\
-  \          }\n        ]\n      }\n    }\n  };\n};\n\nconst getMatchResponse = ()\
-  \ => {\n  return {\n    statusCode: 200,\n    body: {\n      kind: 'content#product',\n\
-  \      id: 'online:en:BR:',\n      offerId: '',\n      identifierExists: false,\n\
-  \      title: 'produtinho maravilhoso para voce',\n      description:\n        'test\
+  \ item_id: '123', item_sku: 'abc', price: 1 },\n          { item_id: '456', item_sku:\
+  \ 'def', price: 2.99 },\n          { item_id: '789', item_sku: 'ghi', price: 3.5\
+  \ }\n         ],\n  cache: '12',\n  merchant_center_id: '1111111111',\n  feed_language:\
+  \ 'en',\n  feed_label: 'BR',\n  enable_item_match_status: false\n};\n\n\nconst getNoMatchResponse\
+  \ = () => {\n  return {\n    statusCode: 404,\n    body: {\n      error: {\n   \
+  \     code: 404,\n        message: 'item not found',\n        errors: [\n      \
+  \    {\n            message: 'item not found',\n            domain: 'global',\n\
+  \            reason: 'notFound'\n          }\n        ]\n      }\n    }\n  };\n\
+  };\n\nconst getMatchResponse = () => {\n  return {\n    statusCode: 200,\n    body:\
+  \ {\n      kind: 'content#product',\n      id: 'online:en:BR:',\n      offerId:\
+  \ '',\n      identifierExists: false,\n      title: 'produtinho maravilhoso para\
+  \ voce',\n      description:\n        'test testtest testtest testtest testtest\
   \ testtest testtest testtest testtest testtest testtest testtest testtest testtest\
-  \ testtest testtest testtest testtest testtest testtest test',\n      link: 'https://example.com/',\n\
-  \      imageLink:\n        'https://shopping.googleusercontent.com/image?q=test',\n\
-  \      contentLanguage: 'en',\n      targetCountry: 'BR',\n      feedLabel: 'BR',\n\
-  \      channel: 'online',\n      availability: 'in stock',\n      condition: 'new',\n\
-  \      googleProductCategory: '5181',\n      price: {\n        value: '1.00',\n\
-  \        currency: 'USD'\n      },\n      productTypes: ['Garden furniture'],\n\
-  \      shipping: [\n        {\n          country: 'BR'\n        }\n      ],\n  \
-  \    includedDestinations: ['SurfacesAcrossGoogle'],\n      customAttributes: [\n\
-  \        {\n          name: 'update type',\n          value: 'merge'\n        }\n\
-  \      ]\n    }\n  };\n};\n\nconst setSendHttpRequest = (noMatch) => {\n  let sendHttpRequestExecutions\
-  \ = 0;\n  mock('sendHttpRequest', (requestUrl, requestOptions, requestBody) => {\n\
-  \    const itemIdKey = mockData.itemIdKey ? mockData.itemIdKey : 'item_id';\n  \
-  \  const itemId = mockData.items[sendHttpRequestExecutions][itemIdKey];\n    \n\
-  \    let response;\n    if (noMatch) {\n      response = getNoMatchResponse();\n\
+  \ testtest testtest test',\n      link: 'https://example.com/',\n      imageLink:\n\
+  \        'https://shopping.googleusercontent.com/image?q=test',\n      contentLanguage:\
+  \ 'en',\n      targetCountry: 'BR',\n      feedLabel: 'BR',\n      channel: 'online',\n\
+  \      availability: 'in stock',\n      condition: 'new',\n      googleProductCategory:\
+  \ '5181',\n      price: {\n        value: '1.00',\n        currency: 'USD'\n   \
+  \   },\n      productTypes: ['Garden furniture'],\n      shipping: [\n        {\n\
+  \          country: 'BR'\n        }\n      ],\n      includedDestinations: ['SurfacesAcrossGoogle'],\n\
+  \      customAttributes: [\n        {\n          name: 'update type',\n        \
+  \  value: 'merge'\n        }\n      ]\n    }\n  };\n};\n\nconst setSendHttpRequest\
+  \ = (noMatch) => {\n  let sendHttpRequestExecutions = 0;\n  mock('sendHttpRequest',\
+  \ (requestUrl, requestOptions, requestBody) => {\n    const itemIdKey = mockData.itemIdKey\
+  \ ? mockData.itemIdKey : 'item_id';\n    const itemId = mockData.items[sendHttpRequestExecutions][itemIdKey];\n\
+  \    \n    let response;\n    if (noMatch) {\n      response = getNoMatchResponse();\n\
   \    } else {\n      response = getMatchResponse();\n      response.body.id += itemId;\n\
   \      response.body.offerId += itemId;\n      response.body.title += itemId;\n\
-  \    }\n\n    sendHttpRequestExecutions++;\n\n    return Promise.create((resolve,\
+  \    }\n    \n    sendHttpRequestExecutions++;\n\n    return Promise.create((resolve,\
   \ reject) => {\n      resolve({\n        statusCode: response.statusCode,\n    \
   \    body: JSON.stringify(response.body)\n      });\n    });\n  });\n};\nsetSendHttpRequest();\n\
   \nmockObject('templateDataStorage', {\n  setItemCopy: (key, value) => { },\n  getItemCopy:\
