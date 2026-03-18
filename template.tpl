@@ -887,7 +887,12 @@ scenarios:
     \ 3.5, \n      product_type: 'produtinho maravilhoso para voce789',\n      description:\n\
     \        'test testtest testtest testtest testtest testtest testtest testtest\
     \ testtest testtest testtest testtest testtest testtest testtest testtest test',\n\
-    \      item_category: 'Garden furniture' \n    }]);\n});"
+    \      item_category: 'Garden furniture' \n    },{ \n      item_id: '101', \n\
+    \      item_sku: 'jkl', \n      price: 0.5, \n      product_type: 'produtinho\
+    \ maravilhoso para voce101',\n      description:\n        'test testtest testtest\
+    \ testtest testtest testtest testtest testtest testtest testtest testtest testtest\
+    \ testtest testtest testtest testtest test',\n      item_category: 'Garden furniture'\
+    \ \n    }]);\n});"
 - name: Items Array is modified when the Item ID matches the Item ID in Merchant Center
     (when using a Custom Item ID Key)
   code: "mockData.itemIdKey = 'item_sku';\nmockData.map_categories = true;\nmockData.mapping_basic\
@@ -908,7 +913,11 @@ scenarios:
     \ para voceghi',\n      description:\n        'test testtest testtest testtest\
     \ testtest testtest testtest testtest testtest testtest testtest testtest testtest\
     \ testtest testtest testtest test',\n      item_category: 'Garden furniture' \n\
-    \    }\n  ]);\n});"
+    \    },{ \n      item_id: '101', \n      item_sku: 'jkl', \n      price: 0.5,\
+    \ \n      product_type: 'produtinho maravilhoso para vocejkl',\n      description:\n\
+    \        'test testtest testtest testtest testtest testtest testtest testtest\
+    \ testtest testtest testtest testtest testtest testtest testtest testtest test',\n\
+    \      item_category: 'Garden furniture' \n    }\n  ]);\n});"
 - name: Items Array is NOT modified when the Item ID does NOT match the Item ID in
     Merchant Center
   code: |
@@ -923,7 +932,8 @@ scenarios:
       assertThat(variableResult).isEqualTo([
         { item_id: '123', item_sku: 'abc', price: 1},
         { item_id: '456', item_sku: 'def', price: 2.99},
-        { item_id: '789', item_sku: 'ghi', price: 3.5 }
+        { item_id: '789', item_sku: 'ghi', price: 3.5 },
+        { item_id: '101', item_sku: 'jkl', price: 0.5 }
       ]);
     });
 - name: Items Array is NOT modified when a request promise rejects
@@ -943,48 +953,70 @@ scenarios:
       assertThat(variableResult).isEqualTo([
         { item_id: '123', item_sku: 'abc', price: 1},
         { item_id: '456', item_sku: 'def', price: 2.99},
-        { item_id: '789', item_sku: 'ghi', price: 3.5 }
+        { item_id: '789', item_sku: 'ghi', price: 3.5 },
+        { item_id: '101', item_sku: 'jkl', price: 0.5 }
       ]);
     });
-- name: Items Array is modified when find a match AND is NOT enriched with 'merchant_center_status'
-    when NOT enabled
-  code: "runCode(mockData).then(variableResult => {\n  variableResult.forEach( item\
-    \ => {\n  assertThat(item.merchant_center_status).isUndefined(); \n  });\n});\n"
 - name: Items Array is modified when finds a match AND is enriched with correct 'merchant_center_status'
     when enabled
-  code: "mockData.enable_item_match_status = true;\n\nrunCode(mockData).then(variableResult\
-    \ => {\n  variableResult.forEach( item => {\n  assertThat(item.merchant_center_status).isEqualTo(\"\
-    match\"); \n  });\n});\n"
+  code: |
+    mockData.enable_item_match_status = true;
+
+    runCode(mockData).then((variableResult) => {
+      variableResult.forEach((item) => {
+        assertThat(item.merchant_center_status).isEqualTo('match');
+      });
+    });
 - name: Items Array is enriched with correct 'merchant_center_status' when enabled
-  code: "mockData.enable_item_match_status = true;\n\nlet index = 0;\n\nmock('sendHttpRequest',\
-    \ (requestUrl, requestOptions, requestBody) => {\n    let response;\n\n    if\
-    \ (index === 0) response = getNoMatchResponse();\n    else if (index === 1) response\
-    \ = getMatchResponse();\n    else if (index === 2) return Promise.create((resolve,reject)\
-    \ => reject()); \n    \n    index++;\n\n    return Promise.create((resolve, reject)\
-    \ => {\n      resolve({\n        statusCode: response.statusCode,\n        body:\
-    \ JSON.stringify(response.body)\n      });\n    });\n  });\n\nrunCode(mockData).then(variableResult\
-    \ => {\n  assertThat(variableResult[0].merchant_center_status).isEqualTo('no_match');\n\
-    \  assertThat(variableResult[1].merchant_center_status).isEqualTo('match');\n\
-    \  assertThat(variableResult[2].merchant_center_status).isEqualTo('api_error');\n\
-    });\n\n"
+  code: |
+    mockData.enable_item_match_status = true;
+
+    let index = 0;
+
+    mock('sendHttpRequest', (requestUrl, requestOptions, requestBody) => {
+      let response;
+
+      if (index === 0) response = getNoMatchResponse();
+      else if (index === 1) response = getMatchResponse();
+      else if (index === 2) return Promise.create((resolve, reject) => reject());
+      else if (index === 3) return Promise.create((resolve, reject) => resolve({statusCode: 500, body: {}}));
+
+      index++;
+
+      return Promise.create((resolve, reject) => {
+        resolve({
+          statusCode: response.statusCode,
+          body: JSON.stringify(response.body)
+        });
+      });
+    });
+
+    runCode(mockData).then((variableResult) => {
+      assertThat(variableResult[0].merchant_center_status).isEqualTo('no_match');
+      assertThat(variableResult[1].merchant_center_status).isEqualTo('match');
+      assertThat(variableResult[2].merchant_center_status).isEqualTo('api_error');
+      assertThat(variableResult[3].merchant_center_status).isEqualTo('api_error');
+
+    });
 setup: "const encodeUriComponent = require('encodeUriComponent');\nconst Promise =\
   \ require('Promise');\nconst JSON = require('JSON');\n\nconst enc = (data) => {\n\
   \  return encodeUriComponent(data || '');\n};\n\nconst mockData = {\n  items: [{\
   \ item_id: '123', item_sku: 'abc', price: 1 },\n          { item_id: '456', item_sku:\
   \ 'def', price: 2.99 },\n          { item_id: '789', item_sku: 'ghi', price: 3.5\
-  \ }\n         ],\n  cache: '12',\n  merchant_center_id: '1111111111',\n  feed_language:\
-  \ 'en',\n  feed_label: 'BR',\n  enable_item_match_status: false\n};\n\n\nconst getNoMatchResponse\
-  \ = () => {\n  return {\n    statusCode: 404,\n    body: {\n      error: {\n   \
-  \     code: 404,\n        message: 'item not found',\n        errors: [\n      \
-  \    {\n            message: 'item not found',\n            domain: 'global',\n\
-  \            reason: 'notFound'\n          }\n        ]\n      }\n    }\n  };\n\
-  };\n\nconst getMatchResponse = () => {\n  return {\n    statusCode: 200,\n    body:\
-  \ {\n      kind: 'content#product',\n      id: 'online:en:BR:',\n      offerId:\
-  \ '',\n      identifierExists: false,\n      title: 'produtinho maravilhoso para\
-  \ voce',\n      description:\n        'test testtest testtest testtest testtest\
+  \ },\n          { item_id: '101', item_sku: 'jkl', price: 0.5 }\n         ],\n \
+  \ cache: '12',\n  merchant_center_id: '1111111111',\n  feed_language: 'en',\n  feed_label:\
+  \ 'BR',\n  enable_item_match_status: false\n};\n\n\nconst getNoMatchResponse = ()\
+  \ => {\n  return {\n    statusCode: 404,\n    body: {\n      error: {\n        code:\
+  \ 404,\n        message: 'item not found',\n        errors: [\n          {\n   \
+  \         message: 'item not found',\n            domain: 'global',\n          \
+  \  reason: 'notFound'\n          }\n        ]\n      }\n    }\n  };\n};\n\nconst\
+  \ getMatchResponse = () => {\n  return {\n    statusCode: 200,\n    body: {\n  \
+  \    kind: 'content#product',\n      id: 'online:en:BR:',\n      offerId: '',\n\
+  \      identifierExists: false,\n      title: 'produtinho maravilhoso para voce',\n\
+  \      description:\n        'test testtest testtest testtest testtest testtest\
   \ testtest testtest testtest testtest testtest testtest testtest testtest testtest\
-  \ testtest testtest test',\n      link: 'https://example.com/',\n      imageLink:\n\
-  \        'https://shopping.googleusercontent.com/image?q=test',\n      contentLanguage:\
+  \ testtest test',\n      link: 'https://example.com/',\n      imageLink:\n     \
+  \   'https://shopping.googleusercontent.com/image?q=test',\n      contentLanguage:\
   \ 'en',\n      targetCountry: 'BR',\n      feedLabel: 'BR',\n      channel: 'online',\n\
   \      availability: 'in stock',\n      condition: 'new',\n      googleProductCategory:\
   \ '5181',\n      price: {\n        value: '1.00',\n        currency: 'USD'\n   \
