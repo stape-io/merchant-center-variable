@@ -35,6 +35,7 @@ function getData(item) {
   const storageKey = feed_identifier + item[itemIdKey];
   const cachedItem = templateDataStorage.getItemCopy(storageKey);
   if (cachedItem && cachedItem.ts + cache > getTimestampMillis()) {
+    if (enableItemMatchStatus) item.merchant_center_status = 'match';
     mapResult(item, cachedItem);
     return item;
   }

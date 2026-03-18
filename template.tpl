@@ -50,14 +50,15 @@ ___TEMPLATE_PARAMETERS___
       {
         "type": "TEXT",
         "name": "merchant_center_id",
-        "displayName": "Merchant Center ID Account ID",
+        "displayName": "Merchant Center Account ID",
         "simpleValueType": true,
-        "help": "The Merchant Center ID Account ID. \u003ca href\u003d\"https://support.google.com/paymentscenter/answer/7163092?hl\u003den\"\u003eLearn more\u003c/a\u003e.",
+        "help": "The Merchant Center Account ID.\n\u003cbr/\u003e\u003cbr/\u003e\nThis is located in the top-left corner under your account name. \n\u003cbr/\u003e\nAlternatively, you can find it in the URL as the value for the \u003ci\u003ea\u003d{Account ID}\u003c/i\u003e parameter.",
         "valueValidators": [
           {
             "type": "NON_EMPTY"
           }
-        ]
+        ],
+        "valueHint": "12345678"
       },
       {
         "type": "TEXT",
@@ -76,24 +77,26 @@ ___TEMPLATE_PARAMETERS___
         "name": "feed_language",
         "displayName": "Feed Language",
         "simpleValueType": true,
-        "help": "You can find the parameter in Merchant Center URL: \u003ci\u003elanguage\u003dda\u003c/i\u003e",
+        "help": "You can find this parameter in the URL while editing a product in Merchant Center (e.g., \u003ci\u003elanguage\u003dda\u003c/i\u003e). \n\u003cbr/\u003e\nAlternatively, add the \u003cb\u003eFeed Language\u003c/b\u003e column to your product table overview to see this value directly.",
         "valueValidators": [
           {
             "type": "NON_EMPTY"
           }
-        ]
+        ],
+        "valueHint": "da"
       },
       {
         "type": "TEXT",
         "name": "feed_label",
         "displayName": "Feed Label",
         "simpleValueType": true,
-        "help": "You can find the parameter in Merchant Center URL: \u003ci\u003efeedLabel\u003dDK\u003c/i\u003e",
+        "help": "You can find this parameter in the URL while editing a product in Merchant Center (e.g., \u003ci\u003efeedLabel\u003dDK\u003c/i\u003e). \n\u003cbr/\u003e\nAlternatively, add the \u003cb\u003eFeed Label\u003c/b\u003e column to your product table overview to see this value directly.",
         "valueValidators": [
           {
             "type": "NON_EMPTY"
           }
-        ]
+        ],
+        "valueHint": "DK"
       },
       {
         "type": "CHECKBOX",
@@ -107,7 +110,7 @@ ___TEMPLATE_PARAMETERS___
         "name": "enable_item_match_status",
         "checkboxText": "Add item match status property",
         "simpleValueType": true,
-        "help": "Adds the property \u003cb\u003emerchant_center_status\u003c/b\u003e to each product in the Items Array. It returns\u003c/br\u003e\n\u003cul\u003e\n\u003cli\u003e\u003cb\u003ematch\u003c/b\u003e: The item was found in your catalogue.\u003c/li\u003e\n\u003cli\u003e\u003cb\u003eno_match\u003c/b\u003e:  The item was not found in your catalogue.\u003c/li\u003e\n\u003cli\u003e\u003cb\u003eapi_fail\u003c/b\u003e: There was a problem in the API call.\u003c/li\u003e\n\u003c/ul\u003e"
+        "help": "Adds the property \u003cb\u003emerchant_center_status\u003c/b\u003e to each product in the Items Array. It returns\u003c/br\u003e\n\u003cul\u003e\n\u003cli\u003e\u003cb\u003ematch\u003c/b\u003e: The item was found in your catalogue.\u003c/li\u003e\n\u003cli\u003e\u003cb\u003eno_match\u003c/b\u003e:  The item was not found in your catalogue.\u003c/li\u003e\n\u003cli\u003e\u003cb\u003eapi_error\u003c/b\u003e: There was a problem in the API call.\u003c/li\u003e\n\u003c/ul\u003e"
       }
     ]
   },
@@ -428,6 +431,7 @@ function getData(item) {
   const storageKey = feed_identifier + item[itemIdKey];
   const cachedItem = templateDataStorage.getItemCopy(storageKey);
   if (cachedItem && cachedItem.ts + cache > getTimestampMillis()) {
+    if (enableItemMatchStatus) item.merchant_center_status = 'match';
     mapResult(item, cachedItem);
     return item;
   }
@@ -853,14 +857,24 @@ ___SERVER_PERMISSIONS___
 ___TESTS___
 
 scenarios:
-- name: Request URL contains required fields (when NOT using a Custom ID Key)
+- name: '[Early Exit] Returns undefined when items is not an array'
+  code: |-
+    mockData.items = undefined;
+
+    const variableResult = runCode(mockData);
+
+    assertThat(variableResult).isUndefined();
+    assertApi('sendHttpRequest').wasNotCalled();
+- name: '[Request URL] Request URL contains required fields (when NOT using a Custom
+    ID Key)'
   code: "runCode(mockData).then(variableResult => {\n  mockData.items.forEach(item\
     \ => {\n    assertApi('sendHttpRequest').wasCalledWith(\n      'https://shoppingcontent.googleapis.com/content/v2.1/'\
     \ + \n      enc(mockData.merchant_center_id) + \n      '/products/online:' + \n\
     \      enc(mockData.feed_language) + \n      ':' + \n      enc(mockData.feed_label)\
     \ + \n      ':' + \n      enc(item.item_id), \n      { method: 'GET', authorization:\
     \ 'expectedGoogleAuth' }\n    );\n  });\n});\n"
-- name: Request URL contains required fields (when using a Custom ID Key)
+- name: '[Request URL] Request URL contains required fields (when using a Custom ID
+    Key)'
   code: "mockData.itemIdKey = 'item_sku';\n\nrunCode(mockData).then(variableResult\
     \ => {\n  mockData.items.forEach(item => {\n  assertApi('sendHttpRequest').wasCalledWith(\n\
     \    'https://shoppingcontent.googleapis.com/content/v2.1/' + \n    enc(mockData.merchant_center_id)\
@@ -868,8 +882,8 @@ scenarios:
     \ + \n    enc(mockData.feed_label) + \n    ':' + \n    enc(item[mockData.itemIdKey]),\
     \ \n    { method: 'GET', authorization: 'expectedGoogleAuth' }\n    );\n  });\n\
     });\n\n"
-- name: Items Array is modified when the Item ID matches the Item ID in Merchant Center
-    (when NOT using a Custom Item ID Key)
+- name: '[Field Mapping] Items Array is modified when the Item ID matches the Item
+    ID in Merchant Center (when NOT using a Custom Item ID Key)'
   code: "mockData.map_categories = true;\nmockData.mapping_basic = [ { merchant_center_variable\
     \ : 'title', item_variable: 'product_type'} ];\nmockData.mapping_custom = [ {\
     \ merchant_center_variable : 'description', item_variable: 'description'} ];\n\
@@ -893,8 +907,8 @@ scenarios:
     \ testtest testtest testtest testtest testtest testtest testtest testtest testtest\
     \ testtest testtest testtest testtest test',\n      item_category: 'Garden furniture'\
     \ \n    }]);\n});"
-- name: Items Array is modified when the Item ID matches the Item ID in Merchant Center
-    (when using a Custom Item ID Key)
+- name: '[Field Mapping] Items Array is modified when the Item ID matches the Item
+    ID in Merchant Center (when using a Custom Item ID Key)'
   code: "mockData.itemIdKey = 'item_sku';\nmockData.map_categories = true;\nmockData.mapping_basic\
     \ = [ { merchant_center_variable : 'title', item_variable: 'product_type'} ];\n\
     mockData.mapping_custom = [ { merchant_center_variable : 'description', item_variable:\
@@ -918,8 +932,8 @@ scenarios:
     \        'test testtest testtest testtest testtest testtest testtest testtest\
     \ testtest testtest testtest testtest testtest testtest testtest testtest test',\n\
     \      item_category: 'Garden furniture' \n    }\n  ]);\n});"
-- name: Items Array is NOT modified when the Item ID does NOT match the Item ID in
-    Merchant Center
+- name: '[Field Mapping] Items Array is NOT modified when the Item ID does NOT match
+    the Item ID in Merchant Center'
   code: |
     mockData.map_categories = true;
     mockData.mapping_basic = [ { merchant_center_variable : 'title', item_variable: 'product_type'} ];
@@ -936,7 +950,27 @@ scenarios:
         { item_id: '101', item_sku: 'jkl', price: 0.5 }
       ]);
     });
-- name: Items Array is NOT modified when a request promise rejects
+- name: '[Category Mapping] Maps multiple product_types to correct item_category fields'
+  code: |-
+    mockData.map_categories = true;
+
+    mock('sendHttpRequest', () => {
+      return Promise.create((resolve) => {
+        resolve({
+          statusCode: 200,
+          body: JSON.stringify({
+            productTypes: ['Furniture', 'Garden Furniture', 'Outdoor Seating']
+          })
+        });
+      });
+    });
+
+    runCode(mockData).then((variableResult) => {
+      assertThat(variableResult[0].item_category).isEqualTo('Furniture');
+      assertThat(variableResult[0].item_category2).isEqualTo('Garden Furniture');
+      assertThat(variableResult[0].item_category3).isEqualTo('Outdoor Seating');
+    });
+- name: '[Error Handling] Items Array is NOT modified when a request promise rejects'
   code: |
     mockData.map_categories = true;
     mockData.mapping_basic = [ { merchant_center_variable : 'title', item_variable: 'product_type'} ];
@@ -957,8 +991,8 @@ scenarios:
         { item_id: '101', item_sku: 'jkl', price: 0.5 }
       ]);
     });
-- name: Items Array is modified when finds a match AND is enriched with correct 'merchant_center_status'
-    when enabled
+- name: '[Match Status] Items Array is enriched with match status for all items when
+    status is enabled'
   code: |
     mockData.enable_item_match_status = true;
 
@@ -967,27 +1001,32 @@ scenarios:
         assertThat(item.merchant_center_status).isEqualTo('match');
       });
     });
-- name: Items Array is enriched with correct 'merchant_center_status' when enabled
-  code: |
+- name: '[Match Status] Items Array is enriched with correct merchant_center_status
+    when enabled'
+  code: |-
     mockData.enable_item_match_status = true;
 
     let index = 0;
 
     mock('sendHttpRequest', (requestUrl, requestOptions, requestBody) => {
-      let response;
-
-      if (index === 0) response = getNoMatchResponse();
-      else if (index === 1) response = getMatchResponse();
-      else if (index === 2) return Promise.create((resolve, reject) => reject());
-      else if (index === 3) return Promise.create((resolve, reject) => resolve({statusCode: 500, body: {}}));
-
+      const currentIndex = index;
       index++;
 
-      return Promise.create((resolve, reject) => {
-        resolve({
-          statusCode: response.statusCode,
-          body: JSON.stringify(response.body)
+      if (currentIndex === 0) {
+        return Promise.create((resolve, reject) => {
+          resolve({ statusCode: 404, body: JSON.stringify(getNoMatchResponse().body) });
         });
+      }
+      if (currentIndex === 1) {
+        return Promise.create((resolve, reject) => {
+          resolve({ statusCode: 200, body: JSON.stringify(getMatchResponse().body) });
+        });
+      }
+      if (currentIndex === 2) {
+        return Promise.create((resolve, reject) => reject());
+      }
+      return Promise.create((resolve, reject) => {
+        resolve({ statusCode: 500, body: '{}' });
       });
     });
 
@@ -996,27 +1035,95 @@ scenarios:
       assertThat(variableResult[1].merchant_center_status).isEqualTo('match');
       assertThat(variableResult[2].merchant_center_status).isEqualTo('api_error');
       assertThat(variableResult[3].merchant_center_status).isEqualTo('api_error');
+    });
+- name: '[Template Storage] Caches successful API response in template storage'
+  code: |-
+    let storedItems = 0;
 
+    mockObject('templateDataStorage', {
+      getItemCopy: (key) => undefined,
+      setItemCopy: (key, value) => {
+        storedItems++;
+        assertThat(value.ts).isDefined();
+      }
+    });
+
+    runCode(mockData).then(() => {
+      assertThat(storedItems).isEqualTo(4);
+    });
+- name: '[Cache] Serves item from cache without HTTP request'
+  code: |-
+    const NOW = 1000000000000;
+    mock('getTimestampMillis', NOW);
+    mockData.mapping_basic = [{ merchant_center_variable: 'title', item_variable: 'product_title' }];
+
+    mockObject('templateDataStorage', {
+      getItemCopy: (key) => {
+        return { title: 'Cached Product Title', ts: NOW };
+      },
+      setItemCopy: (key, value) => {}
+    });
+
+    runCode(mockData).then((variableResult) => {
+      assertApi('sendHttpRequest').wasNotCalled();
+      variableResult.forEach((item) => {
+        assertThat(item.product_title).isEqualTo('Cached Product Title');
+      });
+    });
+- name: '[Cache] Sets match status for cached items when enable_item_match_status
+    is enabled'
+  code: |-
+    const NOW = 1000000000000;
+    mock('getTimestampMillis', NOW);
+    mockData.enable_item_match_status = true;
+
+    mockObject('templateDataStorage', {
+      getItemCopy: (key) => {
+        return { title: 'Cached Title', ts: NOW };
+      },
+      setItemCopy: (key, value) => {}
+    });
+
+    runCode(mockData).then((variableResult) => {
+      assertApi('sendHttpRequest').wasNotCalled();
+      variableResult.forEach((item) => {
+        assertThat(item.merchant_center_status).isEqualTo('match');
+      });
+    });
+- name: '[Cache] Makes HTTP request when cached item has expired'
+  code: |-
+    const NOW = 1000000000000;
+    const CACHE_MS = 12 * 60 * 60 * 1000;
+    mock('getTimestampMillis', NOW);
+
+    mockObject('templateDataStorage', {
+      getItemCopy: (key) => {
+        return { title: 'Old Title', ts: NOW - CACHE_MS };
+      },
+      setItemCopy: (key, value) => {}
+    });
+
+    runCode(mockData).then(() => {
+      assertApi('sendHttpRequest').wasCalled();
     });
 setup: "const encodeUriComponent = require('encodeUriComponent');\nconst Promise =\
   \ require('Promise');\nconst JSON = require('JSON');\n\nconst enc = (data) => {\n\
-  \  return encodeUriComponent(data || '');\n};\n\nconst mockData = {\n  items: [{\
-  \ item_id: '123', item_sku: 'abc', price: 1 },\n          { item_id: '456', item_sku:\
-  \ 'def', price: 2.99 },\n          { item_id: '789', item_sku: 'ghi', price: 3.5\
-  \ },\n          { item_id: '101', item_sku: 'jkl', price: 0.5 }\n         ],\n \
-  \ cache: '12',\n  merchant_center_id: '1111111111',\n  feed_language: 'en',\n  feed_label:\
-  \ 'BR',\n  enable_item_match_status: false\n};\n\n\nconst getNoMatchResponse = ()\
-  \ => {\n  return {\n    statusCode: 404,\n    body: {\n      error: {\n        code:\
-  \ 404,\n        message: 'item not found',\n        errors: [\n          {\n   \
-  \         message: 'item not found',\n            domain: 'global',\n          \
-  \  reason: 'notFound'\n          }\n        ]\n      }\n    }\n  };\n};\n\nconst\
-  \ getMatchResponse = () => {\n  return {\n    statusCode: 200,\n    body: {\n  \
-  \    kind: 'content#product',\n      id: 'online:en:BR:',\n      offerId: '',\n\
-  \      identifierExists: false,\n      title: 'produtinho maravilhoso para voce',\n\
-  \      description:\n        'test testtest testtest testtest testtest testtest\
+  \  return encodeUriComponent(data || '');\n};\n\nconst mockData = {\n  items: [\n\
+  \    { item_id: '123', item_sku: 'abc', price: 1 },\n    { item_id: '456', item_sku:\
+  \ 'def', price: 2.99 },\n    { item_id: '789', item_sku: 'ghi', price: 3.5 },\n\
+  \    { item_id: '101', item_sku: 'jkl', price: 0.5 }\n  ],\n  cache: '12',\n  merchant_center_id:\
+  \ '1111111111',\n  feed_language: 'en',\n  feed_label: 'BR',\n  enable_item_match_status:\
+  \ false\n};\n\nconst getNoMatchResponse = () => {\n  return {\n    statusCode: 404,\n\
+  \    body: {\n      error: {\n        code: 404,\n        message: 'item not found',\n\
+  \        errors: [\n          {\n            message: 'item not found',\n      \
+  \      domain: 'global',\n            reason: 'notFound'\n          }\n        ]\n\
+  \      }\n    }\n  };\n};\n\nconst getMatchResponse = () => {\n  return {\n    statusCode:\
+  \ 200,\n    body: {\n      kind: 'content#product',\n      id: 'online:en:BR:',\n\
+  \      offerId: '',\n      identifierExists: false,\n      title: 'produtinho maravilhoso\
+  \ para voce',\n      description:\n        'test testtest testtest testtest testtest\
   \ testtest testtest testtest testtest testtest testtest testtest testtest testtest\
-  \ testtest test',\n      link: 'https://example.com/',\n      imageLink:\n     \
-  \   'https://shopping.googleusercontent.com/image?q=test',\n      contentLanguage:\
+  \ testtest testtest test',\n      link: 'https://example.com/',\n      imageLink:\n\
+  \        'https://shopping.googleusercontent.com/image?q=test',\n      contentLanguage:\
   \ 'en',\n      targetCountry: 'BR',\n      feedLabel: 'BR',\n      channel: 'online',\n\
   \      availability: 'in stock',\n      condition: 'new',\n      googleProductCategory:\
   \ '5181',\n      price: {\n        value: '1.00',\n        currency: 'USD'\n   \
