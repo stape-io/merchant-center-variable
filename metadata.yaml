@@ -1,6 +1,8 @@
 homepage: 'https://stape.io/'
 documentation: 'https://github.com/stape-io/merchant-center-variable'
 versions:
+  - sha: 506b7d8d247171e4f4ba69298304fcbdc5952f29
+    changeNotes: Migrate to Merchant API. Add tests.
   - sha: 0cdadb14685deacc3744b4a59ba5f586aab5b81f
     changeNotes: Console and BigQuery logging removal.
   - sha: dc015386ca3a5b3be9099589212a0b24aa4e5ecc

@@ -1,0 +1,639 @@
+setup: |-
+  const encodeUriComponent = require('encodeUriComponent');
+  const Promise = require('Promise');
+  const JSON = require('JSON');
+
+  const enc = (data) => {
+    return encodeUriComponent(data || '');
+  };
+
+  const mockData = {
+    items: [
+      { item_id: '123', item_sku: 'abc', price: 1 },
+      { item_id: '456', item_sku: 'def', price: 2.99 },
+      { item_id: '789', item_sku: 'ghi', price: 3.5 },
+      { item_id: '101', item_sku: 'jkl', price: 0.5 }
+    ],
+    cache: '12',
+    merchant_center_id: '1111111111',
+    feed_language: 'en',
+    feed_label: 'BR',
+    enable_item_match_status: false
+  };
+
+  const getNoMatchResponse = () => {
+    return {
+      statusCode: 404,
+      body: {
+        error: {
+          code: 404,
+          message: 'item not found',
+          errors: [
+            {
+              message: 'item not found',
+              domain: 'global',
+              reason: 'notFound'
+            }
+          ]
+        }
+      }
+    };
+  };
+
+  const getMatchResponse = () => {
+    return {
+      statusCode: 200,
+      body: {
+        kind: 'content#product',
+        id: 'online:en:BR:',
+        offerId: '',
+        identifierExists: false,
+        title: 'produtinho maravilhoso para voce',
+        description:
+          'test testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest test',
+        link: 'https://example.com/',
+        imageLink:
+          'https://shopping.googleusercontent.com/image?q=test',
+        contentLanguage: 'en',
+        targetCountry: 'BR',
+        feedLabel: 'BR',
+        channel: 'online',
+        availability: 'in stock',
+        condition: 'new',
+        googleProductCategory: '5181',
+        price: {
+          value: '1.00',
+          currency: 'USD'
+        },
+        productTypes: ['Garden furniture'],
+        shipping: [
+          {
+            country: 'BR'
+          }
+        ],
+        includedDestinations: ['SurfacesAcrossGoogle'],
+        customAttributes: [
+          {
+            name: 'update type',
+            value: 'merge'
+          }
+        ]
+      }
+    };
+  };
+
+  const setSendHttpRequest = (noMatch) => {
+    let sendHttpRequestExecutions = 0;
+
+    mock('sendHttpRequest', (requestUrl, requestOptions, requestBody) => {
+      const itemIdKey = mockData.itemIdKey ? mockData.itemIdKey : 'item_id';
+      const itemId = mockData.items[sendHttpRequestExecutions][itemIdKey];
+
+      let response;
+
+      if (noMatch) {
+        response = getNoMatchResponse();
+      } else {
+        response = getMatchResponse();
+        response.body.id += itemId;
+        response.body.offerId += itemId;
+        response.body.title += itemId;
+      }
+
+      sendHttpRequestExecutions++;
+
+      return Promise.create((resolve, reject) => {
+        resolve({
+          statusCode: response.statusCode,
+          body: JSON.stringify(response.body)
+        });
+      });
+    });
+  };
+
+  setSendHttpRequest();
+
+  mockObject('templateDataStorage', {
+    setItemCopy: (key, value) => {},
+    getItemCopy: (key) => {}
+  });
+
+  mock('getGoogleAuth', 'expectedGoogleAuth');
+
+tests:
+  - name: '[Early Exit] Returns undefined when items is not an array'
+    code: |-
+      mockData.items = undefined;
+
+      const variableResult = runCode(mockData);
+
+      assertThat(variableResult).isUndefined();
+      assertApi('sendHttpRequest').wasNotCalled();
+
+  - name: '[Request URL] Request URL contains required fields (when NOT using a Custom ID Key)'
+    code: |-
+      runCode(mockData).then(variableResult => {
+        mockData.items.forEach(item => {
+          const productStringPath =
+            mockData.feed_language +
+            '~' +
+            mockData.feed_label +
+            '~' +
+            item.item_id;
+
+          const productPath = [
+            'accounts',
+            enc(mockData.merchant_center_id),
+            'products',
+            enc(productStringPath)
+          ].join('/');
+
+          const expectedUrl =
+            'https://merchantapi.googleapis.com/products/v1/' + productPath;
+
+          assertApi('sendHttpRequest').wasCalledWith(
+            expectedUrl,
+            { method: 'GET', authorization: 'expectedGoogleAuth' }
+          );
+        });
+      });
+
+  - name: '[Request URL] Request URL contains required fields (when using a Custom ID Key)'
+    code: |-
+      mockData.itemIdKey = 'item_sku';
+
+      runCode(mockData).then(variableResult => {
+        mockData.items.forEach(item => {
+          let productStringPath =
+            mockData.feed_language +
+            '~' +
+            mockData.feed_label +
+            '~' +
+            item[mockData.itemIdKey];
+
+          let productPath = [
+            'accounts',
+            enc(mockData.merchant_center_id),
+            'products',
+            enc(productStringPath)
+          ].join('/');
+
+          let expectedUrl =
+            'https://merchantapi.googleapis.com/products/v1/' + productPath;
+
+          assertApi('sendHttpRequest').wasCalledWith(
+            expectedUrl,
+            { method: 'GET', authorization: 'expectedGoogleAuth' }
+          );
+        });
+      });
+
+  - name: '[Request URL] Encodes product path when Item ID contains special characters'
+    code: |-
+      mockData.feed_label = 'US';
+      mockData.items = [{ item_id: 'sku/123', price: 10 }];
+
+      runCode(mockData).then(variableResult => {
+        assertApi('toBase64').wasCalledWith(
+          'en~US~sku/123',
+          { urlEncoding: true }
+        );
+
+        const expectedUrl =
+          'https://merchantapi.googleapis.com/products/v1/accounts/1111111111/products/ZW5-VVN-c2t1LzEyMw';
+
+        assertApi('sendHttpRequest').wasCalledWith(
+          expectedUrl,
+          { method: 'GET', authorization: 'expectedGoogleAuth' }
+        );
+      });
+
+  - name: '[Field Mapping] Items Array is modified when the Item ID matches the Item ID in Merchant Center (when NOT using a Custom Item ID Key)'
+    code: |-
+      mockData.map_categories = true;
+      mockData.mapping_basic = [
+        { merchant_center_variable: 'title', item_variable: 'product_type' }
+      ];
+      mockData.mapping_custom = [
+        { merchant_center_variable: 'description', item_variable: 'description' }
+      ];
+
+      setSendHttpRequest();
+
+      runCode(mockData).then(variableResult => {
+        assertThat(variableResult).isEqualTo([
+          {
+            item_id: '123',
+            item_sku: 'abc',
+            price: 1,
+            product_type: 'produtinho maravilhoso para voce123',
+            description:
+              'test testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest test',
+            item_category: 'Garden furniture'
+          },
+          {
+            item_id: '456',
+            item_sku: 'def',
+            price: 2.99,
+            product_type: 'produtinho maravilhoso para voce456',
+            description:
+              'test testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest test',
+            item_category: 'Garden furniture'
+          },
+          {
+            item_id: '789',
+            item_sku: 'ghi',
+            price: 3.5,
+            product_type: 'produtinho maravilhoso para voce789',
+            description:
+              'test testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest test',
+            item_category: 'Garden furniture'
+          },
+          {
+            item_id: '101',
+            item_sku: 'jkl',
+            price: 0.5,
+            product_type: 'produtinho maravilhoso para voce101',
+            description:
+              'test testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest test',
+            item_category: 'Garden furniture'
+          }
+        ]);
+      });
+
+  - name: '[Field Mapping] Items Array is modified when the Item ID matches the Item ID in Merchant Center (when using a Custom Item ID Key)'
+    code: |-
+      mockData.itemIdKey = 'item_sku';
+      mockData.map_categories = true;
+
+      mockData.mapping_basic = [
+        { merchant_center_variable: 'title', item_variable: 'product_type' }
+      ];
+
+      mockData.mapping_custom = [
+        { merchant_center_variable: 'description', item_variable: 'description' }
+      ];
+
+      setSendHttpRequest();
+
+      runCode(mockData).then(variableResult => {
+        assertThat(variableResult).isEqualTo([
+          {
+            item_id: '123',
+            item_sku: 'abc',
+            price: 1,
+            product_type: 'produtinho maravilhoso para voceabc',
+            description:
+              'test testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest test',
+            item_category: 'Garden furniture'
+          },
+          {
+            item_id: '456',
+            item_sku: 'def',
+            price: 2.99,
+            product_type: 'produtinho maravilhoso para vocedef',
+            description:
+              'test testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest test',
+            item_category: 'Garden furniture'
+          },
+          {
+            item_id: '789',
+            item_sku: 'ghi',
+            price: 3.5,
+            product_type: 'produtinho maravilhoso para voceghi',
+            description:
+              'test testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest test',
+            item_category: 'Garden furniture'
+          },
+          {
+            item_id: '101',
+            item_sku: 'jkl',
+            price: 0.5,
+            product_type: 'produtinho maravilhoso para vocejkl',
+            description:
+              'test testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest testtest test',
+            item_category: 'Garden furniture'
+          }
+        ]);
+      });
+
+  - name: '[Field Mapping] Items Array is NOT modified when the Item ID does NOT match the Item ID in Merchant Center'
+    code: |-
+      mockData.map_categories = true;
+
+      mockData.mapping_basic = [
+        { merchant_center_variable: 'title', item_variable: 'product_type' }
+      ];
+
+      mockData.mapping_custom = [
+        { merchant_center_variable: 'description', item_variable: 'description' }
+      ];
+
+      const noMatch = true;
+      setSendHttpRequest(noMatch);
+
+      runCode(mockData).then(variableResult => {
+        assertThat(variableResult).isEqualTo([
+          { item_id: '123', item_sku: 'abc', price: 1 },
+          { item_id: '456', item_sku: 'def', price: 2.99 },
+          { item_id: '789', item_sku: 'ghi', price: 3.5 },
+          { item_id: '101', item_sku: 'jkl', price: 0.5 }
+        ]);
+      });
+
+  - name: '[Category Mapping] Maps multiple product_types to correct item_category fields'
+    code: |-
+      mockData.map_categories = true;
+
+      mock('sendHttpRequest', () => {
+        return Promise.create((resolve) => {
+          resolve({
+            statusCode: 200,
+            body: JSON.stringify({
+              productTypes: [
+                'Furniture',
+                'Garden Furniture',
+                'Outdoor Seating'
+              ]
+            })
+          });
+        });
+      });
+
+      runCode(mockData).then((variableResult) => {
+        assertThat(variableResult[0].item_category).isEqualTo('Furniture');
+        assertThat(variableResult[0].item_category2).isEqualTo('Garden Furniture');
+        assertThat(variableResult[0].item_category3).isEqualTo('Outdoor Seating');
+      });
+
+  - name: '[Error Handling] Items Array is NOT modified when a request promise rejects'
+    code: |-
+      mockData.map_categories = true;
+
+      mockData.mapping_basic = [
+        { merchant_center_variable: 'title', item_variable: 'product_type' }
+      ];
+
+      mockData.mapping_custom = [
+        { merchant_center_variable: 'description', item_variable: 'description' }
+      ];
+
+      mock('sendHttpRequest', () => {
+        return Promise.create((resolve, reject) => {
+          reject({ reason: 'failed' });
+        });
+      });
+
+      runCode(mockData).then(variableResult => {
+        assertThat(variableResult).isEqualTo([
+          { item_id: '123', item_sku: 'abc', price: 1 },
+          { item_id: '456', item_sku: 'def', price: 2.99 },
+          { item_id: '789', item_sku: 'ghi', price: 3.5 },
+          { item_id: '101', item_sku: 'jkl', price: 0.5 }
+        ]);
+      });
+
+  - name: '[Match Status] Items Array is enriched with match status for all items when status is enabled'
+    code: |-
+      mockData.enable_item_match_status = true;
+
+      runCode(mockData).then((variableResult) => {
+        variableResult.forEach((item) => {
+          assertThat(item.merchant_center_status).isEqualTo('match');
+        });
+      });
+
+  - name: '[Match Status] Items Array is enriched with correct merchant_center_status when enabled'
+    code: |-
+      mockData.enable_item_match_status = true;
+
+      let index = 0;
+
+      mock('sendHttpRequest', (requestUrl, requestOptions, requestBody) => {
+        const currentIndex = index;
+        index++;
+
+        if (currentIndex === 0) {
+          return Promise.create((resolve, reject) => {
+            resolve({
+              statusCode: 404,
+              body: JSON.stringify(getNoMatchResponse().body)
+            });
+          });
+        }
+
+        if (currentIndex === 1) {
+          return Promise.create((resolve, reject) => {
+            resolve({
+              statusCode: 200,
+              body: JSON.stringify(getMatchResponse().body)
+            });
+          });
+        }
+
+        if (currentIndex === 2) {
+          return Promise.create((resolve, reject) => reject());
+        }
+
+        return Promise.create((resolve, reject) => {
+          resolve({ statusCode: 500, body: '{}' });
+        });
+      });
+
+      runCode(mockData).then((variableResult) => {
+        assertThat(variableResult[0].merchant_center_status).isEqualTo('no_match');
+        assertThat(variableResult[1].merchant_center_status).isEqualTo('match');
+        assertThat(variableResult[2].merchant_center_status).isEqualTo('api_error');
+        assertThat(variableResult[3].merchant_center_status).isEqualTo('api_error');
+      });
+
+  - name: '[Template Storage] Caches successful API response in template storage'
+    code: |-
+      let storedItems = 0;
+
+      mockObject('templateDataStorage', {
+        getItemCopy: (key) => undefined,
+        setItemCopy: (key, value) => {
+          storedItems++;
+          assertThat(value.ts).isDefined();
+        }
+      });
+
+      runCode(mockData).then(() => {
+        assertThat(storedItems).isEqualTo(4);
+      });
+
+  - name: '[Cache] Serves item from cache without HTTP request'
+    code: |-
+      const NOW = 1000000000000;
+
+      mock('getTimestampMillis', NOW);
+
+      mockData.mapping_basic = [
+        { merchant_center_variable: 'title', item_variable: 'product_title' }
+      ];
+
+      mockObject('templateDataStorage', {
+        getItemCopy: (key) => {
+          return { title: 'Cached Product Title', ts: NOW };
+        },
+        setItemCopy: (key, value) => {}
+      });
+
+      runCode(mockData).then((variableResult) => {
+        assertApi('sendHttpRequest').wasNotCalled();
+
+        variableResult.forEach((item) => {
+          assertThat(item.product_title).isEqualTo('Cached Product Title');
+        });
+      });
+
+  - name: '[Cache] Sets match status for cached items when enable_item_match_status is enabled'
+    code: |-
+      const NOW = 1000000000000;
+
+      mock('getTimestampMillis', NOW);
+      mockData.enable_item_match_status = true;
+
+      mockObject('templateDataStorage', {
+        getItemCopy: (key) => {
+          return { title: 'Cached Title', ts: NOW };
+        },
+        setItemCopy: (key, value) => {}
+      });
+
+      runCode(mockData).then((variableResult) => {
+        assertApi('sendHttpRequest').wasNotCalled();
+
+        variableResult.forEach((item) => {
+          assertThat(item.merchant_center_status).isEqualTo('match');
+        });
+      });
+
+  - name: '[Cache] Makes HTTP request when cached item has expired'
+    code: |-
+      const NOW = 1000000000000;
+      const CACHE_MS = 12 * 60 * 60 * 1000;
+
+      mock('getTimestampMillis', NOW);
+
+      mockObject('templateDataStorage', {
+        getItemCopy: (key) => {
+          return { title: 'Old Title', ts: NOW - CACHE_MS };
+        },
+        setItemCopy: (key, value) => {}
+      });
+
+      runCode(mockData).then(() => {
+        assertApi('sendHttpRequest').wasCalled();
+      });
+
+  - name: '[Field Mapping] Dot notation resolves nested value and array element by numeric key'
+    code: |-
+      mockData.items = [{ item_id: '123', price: 1 }];
+      mockData.mapping_custom = [
+        { merchant_center_variable: 'productAttributes.brand', item_variable: 'brand' },
+        { merchant_center_variable: 'productAttributes.gtins.0', item_variable: 'gtin_direct' }
+      ];
+
+      mock('sendHttpRequest', () => {
+        return Promise.create((resolve) => {
+          resolve({
+            statusCode: 200,
+            body: JSON.stringify({ productAttributes: { brand: 'TestBrand', gtins: ['12345', '67890'] } })
+          });
+        });
+      });
+
+      runCode(mockData).then((variableResult) => {
+        assertThat(variableResult[0].brand).isEqualTo('TestBrand');
+        assertThat(variableResult[0].gtin_direct).isEqualTo('12345');
+      });
+
+  - name: '[Field Mapping] Dot notation returns undefined when path does not exist or has null midway'
+    code: |-
+      mockData.items = [{ item_id: '123', price: 1 }];
+      mockData.mapping_custom = [
+        { merchant_center_variable: 'productAttributes.nonExistent.deep', item_variable: 'missing_field' },
+        { merchant_center_variable: 'productAttributes.brand.sub', item_variable: 'null_midway_field' }
+      ];
+
+      mock('sendHttpRequest', () => {
+        return Promise.create((resolve) => {
+          resolve({
+            statusCode: 200,
+            body: JSON.stringify({ productAttributes: { brand: null } })
+          });
+        });
+      });
+
+      runCode(mockData).then((variableResult) => {
+        assertThat(variableResult[0].missing_field).isUndefined();
+        assertThat(variableResult[0].null_midway_field).isUndefined();
+      });
+
+  - name: '[Field Mapping] id key is remapped to name via backward compat dictionary'
+    code: |-
+      mockData.items = [{ item_id: '123', price: 1 }];
+      mockData.mapping_custom = [
+        { merchant_center_variable: 'id', item_variable: 'product_name' }
+      ];
+
+      mock('sendHttpRequest', () => {
+        return Promise.create((resolve) => {
+          resolve({
+            statusCode: 200,
+            body: JSON.stringify({ name: 'accounts/123/products/sku1' })
+          });
+        });
+      });
+
+      runCode(mockData).then((variableResult) => {
+        assertThat(variableResult[0].product_name).isEqualTo('accounts/123/products/sku1');
+      });
+
+  - name: '[Field Mapping] gtins key unwraps array and returns first element'
+    code: |-
+      mockData.items = [{ item_id: '123', price: 1 }];
+      mockData.mapping_basic = [
+        { merchant_center_variable: 'gtins', item_variable: 'item_gtin' }
+      ];
+
+      mock('sendHttpRequest', () => {
+        return Promise.create((resolve) => {
+          resolve({
+            statusCode: 200,
+            body: JSON.stringify({ productAttributes: { gtins: ['111', '222'] } })
+          });
+        });
+      });
+
+      runCode(mockData).then((variableResult) => {
+        assertThat(variableResult[0].item_gtin).isEqualTo('111');
+      });
+
+  - name: '[Field Mapping] Non dot notation prefers productAttributes value and falls back to top-level resultData'
+    code: |-
+      mockData.items = [{ item_id: '123', price: 1 }];
+      mockData.mapping_custom = [
+        { merchant_center_variable: 'brand', item_variable: 'brand_field' },
+        { merchant_center_variable: 'feedLabel', item_variable: 'feed_label_val' }
+      ];
+
+      mock('sendHttpRequest', () => {
+        return Promise.create((resolve) => {
+          resolve({
+            statusCode: 200,
+            body: JSON.stringify({
+              feedLabel: 'US',
+              brand: 'TopLevel',
+              productAttributes: { brand: 'Nested' }
+            })
+          });
+        });
+      });
+
+      runCode(mockData).then((variableResult) => {
+        assertThat(variableResult[0].brand_field).isEqualTo('Nested');
+        assertThat(variableResult[0].feed_label_val).isEqualTo('US');
+      });

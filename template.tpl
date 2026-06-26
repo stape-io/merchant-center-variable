@@ -25,9 +25,13 @@ ___TEMPLATE_PARAMETERS___
 
 [
   {
+    "type": "LABEL",
+    "name": "apiMigrationWarningLabel",
+    "displayName": "⚠️ \u003cb\u003eImportant: API Migration Required (deadline August 18, 2026)\u003c/b\u003e ⚠️ \n\u003cbr/\u003e\nThe Content API for Shopping used by this variable will be sunset on August 18, 2026 and replaced by the Merchant API. This variable has been updated to utilize the new Merchant API to query product data.\n\u003cbr/\u003e\nPlease complete the \u003ca href\u003d\"https://github.com/stape-io/merchant-center-variable#migrating-from-content-api-for-shopping-to-merchant-api\"\u003erequired steps\u003c/a\u003e to migrate to the Merchant API before publishing this updated variable version to production. After completing the migration, make sure to test and verify all mapped Merchant Center attributes used by this variable. You can then safely ignore this warning.\n\u003cbr/\u003e\u003cbr/\u003e"
+  },
+  {
     "type": "GROUP",
     "name": "settingsGroup",
-    "groupStyle": "NO_ZIPPY",
     "subParams": [
       {
         "type": "TEXT",
@@ -38,7 +42,20 @@ ___TEMPLATE_PARAMETERS___
           {
             "type": "NON_EMPTY"
           }
+        ],
+        "enablingConditions": [
+          {
+            "paramName": "useGA4Items",
+            "paramValue": true,
+            "type": "NOT_EQUALS"
+          }
         ]
+      },
+      {
+        "type": "CHECKBOX",
+        "name": "useGA4Items",
+        "checkboxText": "Use GA4 Items as Items Array",
+        "simpleValueType": true
       },
       {
         "type": "TEXT",
@@ -59,18 +76,6 @@ ___TEMPLATE_PARAMETERS___
           }
         ],
         "valueHint": "12345678"
-      },
-      {
-        "type": "TEXT",
-        "name": "cache",
-        "displayName": "Cache (hours)",
-        "simpleValueType": true,
-        "defaultValue": 12,
-        "valueValidators": [
-          {
-            "type": "NON_NEGATIVE_NUMBER"
-          }
-        ]
       },
       {
         "type": "TEXT",
@@ -99,25 +104,38 @@ ___TEMPLATE_PARAMETERS___
         "valueHint": "DK"
       },
       {
+        "type": "TEXT",
+        "name": "cache",
+        "displayName": "Cache (hours)",
+        "simpleValueType": true,
+        "defaultValue": 12,
+        "valueValidators": [
+          {
+            "type": "NON_NEGATIVE_NUMBER"
+          }
+        ],
+        "help": "All requests to Merchant Center are cached to avoid unwanted additional network requests.\n\u003cbr/\u003e\nIf you don\u0027t want to cache them, set it to 0."
+      },
+      {
         "type": "CHECKBOX",
         "name": "map_categories",
-        "checkboxText": "Map product_types into item_categories",
+        "checkboxText": "Map productTypes array into item_category properties",
         "simpleValueType": true,
-        "help": "If checked, this option maps the \u003ci\u003eproduct_type\u003c/i\u003e in the Merchant Center to the \u003ci\u003eitem_category\u003c/i\u003e field."
+        "help": "If enabled, this option maps the \u003ci\u003e\u003ca href\u003d\"https://developers.google.com/merchant/api/reference/rest/products_v1/ProductAttributes#:~:text\u003dof%20this%20item.-,productTypes,-%5B%5D\"\u003eproductTypes\u003c/a\u003e\u003c/i\u003e array from Merchant Center to the GA4 \u003ci\u003eitem_category\u003c/i\u003e fields (\u003ci\u003eitem_category\u003c/i\u003e, \u003ci\u003eitem_category2\u003c/i\u003e, \u003ci\u003eitem_category3\u003c/i\u003e etc.)."
       },
       {
         "type": "CHECKBOX",
         "name": "enable_item_match_status",
         "checkboxText": "Add item match status property",
         "simpleValueType": true,
-        "help": "Adds the property \u003cb\u003emerchant_center_status\u003c/b\u003e to each product in the Items Array. It returns\u003c/br\u003e\n\u003cul\u003e\n\u003cli\u003e\u003cb\u003ematch\u003c/b\u003e: The item was found in your catalogue.\u003c/li\u003e\n\u003cli\u003e\u003cb\u003eno_match\u003c/b\u003e:  The item was not found in your catalogue.\u003c/li\u003e\n\u003cli\u003e\u003cb\u003eapi_error\u003c/b\u003e: There was a problem in the API call.\u003c/li\u003e\n\u003c/ul\u003e"
+        "help": "Adds the property \u003cb\u003emerchant_center_status\u003c/b\u003e to each product in the Items Array. It returns:\u003c/br\u003e\n\u003cul\u003e\n\u003cli\u003e\u003cb\u003ematch\u003c/b\u003e: The item was found in your catalog.\u003c/li\u003e\n\u003cli\u003e\u003cb\u003eno_match\u003c/b\u003e:  The item was not found in your catalog.\u003c/li\u003e\n\u003cli\u003e\u003cb\u003eapi_error\u003c/b\u003e: There was a problem in the API call.\u003c/li\u003e\n\u003c/ul\u003e"
       }
     ]
   },
   {
     "type": "GROUP",
     "name": "basicMappingGroup",
-    "displayName": "Basic mapping",
+    "displayName": "Basic Mapping",
     "groupStyle": "ZIPPY_OPEN",
     "subParams": [
       {
@@ -126,88 +144,121 @@ ___TEMPLATE_PARAMETERS___
         "simpleTableColumns": [
           {
             "defaultValue": "",
-            "displayName": "Merchant Center variable",
+            "displayName": "Merchant Center attribute",
             "name": "merchant_center_variable",
             "type": "SELECT",
             "selectItems": [
               {
                 "value": "adult",
-                "displayValue": "adult"
+                "displayValue": "productAttributes.adult"
               },
               {
-                "value": "age_group",
-                "displayValue": "age_group"
+                "value": "ageGroup",
+                "displayValue": "productAttributes.ageGroup"
               },
               {
                 "value": "availability",
-                "displayValue": "availability"
+                "displayValue": "productAttributes.availability"
               },
               {
-                "value": "is_bundle",
-                "displayValue": "bundle (is_bundle)"
+                "value": "isBundle",
+                "displayValue": "productAttributes.isBundle"
               },
               {
                 "value": "brand",
-                "displayValue": "brand"
+                "displayValue": "productAttributes.brand"
               },
               {
                 "value": "color",
-                "displayValue": "color"
+                "displayValue": "productAttributes.color"
               },
               {
                 "value": "condition",
-                "displayValue": "condition"
+                "displayValue": "productAttributes.condition"
               },
               {
                 "value": "gender",
-                "displayValue": "gender"
+                "displayValue": "productAttributes.gender"
               },
               {
                 "value": "gtin",
-                "displayValue": "gtin"
+                "displayValue": "gtin (deprecated - use productAttributes.gtins[0] instead)"
+              },
+              {
+                "value": "gtins",
+                "displayValue": "productAttributes.gtins[0]"
               },
               {
                 "value": "imageLink",
-                "displayValue": "imageLink"
+                "displayValue": "productAttributes.imageLink"
               },
               {
                 "value": "link",
-                "displayValue": "link"
+                "displayValue": "productAttributes.link"
               },
               {
                 "value": "material",
-                "displayValue": "material"
+                "displayValue": "productAttributes.material"
               },
               {
                 "value": "mpn",
-                "displayValue": "mpn"
+                "displayValue": "productAttributes.mpn"
               },
               {
                 "value": "pattern",
-                "displayValue": "pattern"
+                "displayValue": "productAttributes.pattern"
               },
               {
                 "value": "title",
-                "displayValue": "title"
+                "displayValue": "productAttributes.title"
+              },
+              {
+                "value": "legacyLocal",
+                "displayValue": "legacyLocal"
+              },
+              {
+                "value": "dataSource",
+                "displayValue": "dataSource"
+              },
+              {
+                "value": "archived",
+                "displayValue": "archived"
+              },
+              {
+                "value": "versionNumber",
+                "displayValue": "versionNumber"
+              }
+            ],
+            "isUnique": true,
+            "valueValidators": [
+              {
+                "type": "NON_EMPTY"
               }
             ]
           },
           {
             "defaultValue": "",
-            "displayName": "Item variable",
+            "displayName": "Item attribute",
             "name": "item_variable",
-            "type": "TEXT"
+            "type": "TEXT",
+            "isUnique": true,
+            "valueValidators": [
+              {
+                "type": "NON_EMPTY"
+              }
+            ]
           }
         ],
-        "help": "Map predefined attributes from your Merchant Center data to item data.",
-        "displayName": "Basic mapping"
+        "help": "Map  \u003cb\u003epredefined\u003c/b\u003e attributes from your Merchant Center data to item data. Either from root object returned by Merchant Center (\u003ca href\u003d\"https://developers.google.com/merchant/api/reference/rest/products_v1/accounts.products#Product\"\u003e[1]\u003c/a\u003e) or from the \u003ci\u003eproductAttributes\u003c/i\u003e key (\u003ca href\u003d\"https://developers.google.com/merchant/api/reference/rest/products_v1/ProductAttributes\"\u003e[2]\u003c/a\u003e).",
+        "displayName": "Basic Mapping",
+        "newRowButtonText": "Add attribute"
       }
     ]
   },
   {
     "type": "GROUP",
     "name": "customMappingGroup",
-    "displayName": "Custom mapping",
+    "displayName": "Custom Mapping",
     "groupStyle": "ZIPPY_OPEN",
     "subParams": [
       {
@@ -216,81 +267,32 @@ ___TEMPLATE_PARAMETERS___
         "simpleTableColumns": [
           {
             "defaultValue": "",
-            "displayName": "Merchant Center variable",
+            "displayName": "Merchant Center attribute",
             "name": "merchant_center_variable",
             "type": "TEXT",
-            "selectItems": [
+            "valueValidators": [
               {
-                "value": "adult",
-                "displayValue": "adult"
-              },
-              {
-                "value": "age_group",
-                "displayValue": "age_group"
-              },
-              {
-                "value": "availability",
-                "displayValue": "availability"
-              },
-              {
-                "value": "is_bundle",
-                "displayValue": "bundle (is_bundle)"
-              },
-              {
-                "value": "brand",
-                "displayValue": "brand"
-              },
-              {
-                "value": "color",
-                "displayValue": "color"
-              },
-              {
-                "value": "condition",
-                "displayValue": "condition"
-              },
-              {
-                "value": "gender",
-                "displayValue": "gender"
-              },
-              {
-                "value": "gtin",
-                "displayValue": "gtin"
-              },
-              {
-                "value": "image_link",
-                "displayValue": "image_link"
-              },
-              {
-                "value": "link",
-                "displayValue": "link"
-              },
-              {
-                "value": "material",
-                "displayValue": "material"
-              },
-              {
-                "value": "mpn",
-                "displayValue": "mpn"
-              },
-              {
-                "value": "pattern",
-                "displayValue": "pattern"
-              },
-              {
-                "value": "title",
-                "displayValue": "title"
+                "type": "NON_EMPTY"
               }
-            ]
+            ],
+            "isUnique": true
           },
           {
             "defaultValue": "",
-            "displayName": "Item variable",
+            "displayName": "Item attribute",
             "name": "item_variable",
-            "type": "TEXT"
+            "type": "TEXT",
+            "valueValidators": [
+              {
+                "type": "NON_EMPTY"
+              }
+            ],
+            "isUnique": true
           }
         ],
-        "help": "Map custom attributes from your Merchant Center data to item data.",
-        "displayName": "Custom mapping"
+        "help": "Map \u003cb\u003eother\u003c/b\u003e attributes from your Merchant Center data to item data. From root object returned by Merchant Center or from any other nested array or object (\u003ci\u003eProductAttributes\u003c/i\u003e, \u003ci\u003eProductStatus\u003c/i\u003e, \u003ci\u003eCustomAttributes\u003c/i\u003e etc.). \u003ca href\u003d\"https://developers.google.com/merchant/api/reference/rest/products_v1/accounts.products#Product\"\u003eLearn more\u003c/a\u003e.\n\u003cbr/\u003e\nUse dot notation syntax to access nested values. Examples:\n\u003cul\u003e\n\u003cli\u003e\u003ci\u003eproductAttributes.price.currency\u003c/i\u003e: to retrieve the price currency\u003c/li\u003e\n\u003cli\u003e\u003ci\u003eproductStatus.creationDate\u003c/i\u003e: to retrieve the creation date.\u003c/li\u003e\n\u003cli\u003e\u003ci\u003ecustomAttributes.0.name\u003c/i\u003e: to access the name of the first custom attribute in the array.\u003c/li\u003e\n\u003c/ul\u003e",
+        "displayName": "Custom Mapping",
+        "newRowButtonText": "Add attribute"
       }
     ]
   }
@@ -299,7 +301,9 @@ ___TEMPLATE_PARAMETERS___
 
 ___SANDBOXED_JS_FOR_SERVER___
 
+const createRegex = require('createRegex');
 const encodeUriComponent = require('encodeUriComponent');
+const getEventData = require('getEventData');
 const getGoogleAuth = require('getGoogleAuth');
 const getTimestampMillis = require('getTimestampMillis');
 const getType = require('getType');
@@ -309,56 +313,77 @@ const makeString = require('makeString');
 const Promise = require('Promise');
 const sendHttpRequest = require('sendHttpRequest');
 const templateDataStorage = require('templateDataStorage');
+const toBase64 = require('toBase64');
 
 /*==============================================================================
 ==============================================================================*/
 
-const cache = makeNumber(data.cache) * 60 * 60 * 1000;
-const feed_identifier = data.feed_language + '_' + data.feed_label;
+const API_VERSION = '1';
 const itemIdKey = data.itemIdKey ? data.itemIdKey : 'item_id';
-const enableItemMatchStatus = data.enable_item_match_status;
-
-const items = data.items;
+const items = data.useGA4Items ? getEventData('items') : data.items;
 
 if (getType(items) !== 'array') return undefined;
 
-return Promise.all(items.map(getData));
+return Promise.all(items.map(getItemData));
 
 /*==============================================================================
   Vendor related functions
 ==============================================================================*/
 
-function getData(item) {
-  const storageKey = feed_identifier + item[itemIdKey];
-  const cachedItem = templateDataStorage.getItemCopy(storageKey);
-  if (cachedItem && cachedItem.ts + cache > getTimestampMillis()) {
+function getMerchantApiRequestUrl(item) {
+  const merchantId = enc(data.merchant_center_id);
+  const feedLanguage = makeString(data.feed_language);
+  const feedLabel = makeString(data.feed_label);
+  const itemId = makeString(item[itemIdKey]);
+  const baseUrl = 'https://merchantapi.googleapis.com/products/v' + API_VERSION + '/';
+
+  let productStringPath = feedLanguage + '~' + feedLabel + '~' + itemId;
+  if (productStringPathNeedsEncoding(feedLanguage + feedLabel + itemId)) {
+    productStringPath = encodeForMerchantApi(productStringPath);
+  }
+
+  const productPath = ['accounts', merchantId, 'products', productStringPath].join('/');
+  return baseUrl + productPath;
+}
+
+function productStringPathNeedsEncoding(string) {
+  // URI reserved characters
+  if (string.match('[\\.\\:\\,\\(\\)\\*\\!\\/\\&\\?\\#\\=\\%\\~\\@\\+\\$]')) return true;
+  return false;
+}
+
+function encodeForMerchantApi(string) {
+  if (!string) return '';
+  const paddingRegex = createRegex('=*', 'ig');
+  const encodedString = toBase64(string, { urlEncoding: true });
+  return encodedString.replace(paddingRegex, '');
+}
+
+function getItemData(item) {
+  const enableItemMatchStatus = data.enable_item_match_status;
+
+  const feedIdentifier = data.merchant_center_id + '_' + data.feed_language + '_' + data.feed_label;
+  const storageKey = feedIdentifier + item[itemIdKey];
+  const cacheExpirationTime = makeNumber(data.cache) * 60 * 60 * 1000;
+  const cachedResultData = templateDataStorage.getItemCopy(storageKey);
+  if (cachedResultData && cachedResultData.ts + cacheExpirationTime > getTimestampMillis()) {
     if (enableItemMatchStatus) item.merchant_center_status = 'match';
-    mapResult(item, cachedItem);
+    item = mapResult(item, cachedResultData);
     return item;
   }
 
-  const url =
-    'https://shoppingcontent.googleapis.com/content/v2.1/' +
-    enc(data.merchant_center_id) +
-    '/products/online:' +
-    enc(data.feed_language) +
-    ':' +
-    enc(data.feed_label) +
-    ':' +
-    enc(item[itemIdKey]);
-
+  const merchantApiUrl = getMerchantApiRequestUrl(item);
   const auth = getGoogleAuth({
     scopes: ['https://www.googleapis.com/auth/content']
   });
-
-  return sendHttpRequest(url, { method: 'GET', authorization: auth }).then(
+  return sendHttpRequest(merchantApiUrl, { method: 'GET', authorization: auth }).then(
     (result) => {
-      const result_data = JSON.parse(result.body || '{}');
+      const resultData = JSON.parse(result.body || '{}');
       if (result.statusCode >= 200 && result.statusCode < 300) {
         if (enableItemMatchStatus) item.merchant_center_status = 'match';
-        result_data.ts = getTimestampMillis();
-        templateDataStorage.setItemCopy(storageKey, result_data);
-        mapResult(item, result_data);
+        resultData.ts = getTimestampMillis();
+        templateDataStorage.setItemCopy(storageKey, resultData);
+        item = mapResult(item, resultData);
       } else if (result.statusCode === 404) {
         if (enableItemMatchStatus) item.merchant_center_status = 'no_match';
       } else {
@@ -373,12 +398,13 @@ function getData(item) {
   );
 }
 
-function mapResult(item, result_data) {
-  mapResultVariables(item, result_data, data.mapping_basic);
-  mapResultVariables(item, result_data, data.mapping_custom);
+function mapResult(item, resultData) {
+  item = mapResultVariables(item, resultData, data.mapping_basic);
+  item = mapResultVariables(item, resultData, data.mapping_custom);
 
-  if (data.map_categories && result_data.productTypes) {
-    result_data.productTypes.forEach((productType, index) => {
+  const productTypes = (resultData.productAttributes || {}).productTypes || resultData.productTypes; // Backward compatibility.
+  if (data.map_categories && getType(productTypes) === 'array') {
+    productTypes.forEach((productType, index) => {
       const itemCategoryIndex = index !== 0 ? index + 1 : '';
       item['item_category' + itemCategoryIndex] = productType;
     });
@@ -387,14 +413,50 @@ function mapResult(item, result_data) {
   return item;
 }
 
-function mapResultVariables(item, result_data, mapping) {
-  if (getType(mapping) !== 'array') return;
+function mapResultVariables(item, resultData, mapping) {
+  if (getType(mapping) !== 'array') return item;
 
-  for (let i = 0; i < mapping.length; i++) {
-    const mappingItem = mapping[i];
-    const value = result_data[mappingItem.merchant_center_variable];
-    if (value) item[mappingItem.item_variable] = value;
-  }
+  const contentApiToMerchantApiDictionary = {
+    // Top-level attributes
+    id: 'name',
+    targetCountry: 'feedLabel',
+    // .productAttributes attributes
+    gtin: 'gtins'
+  };
+
+  mapping.forEach((mappingItem) => {
+    const keyForMerchant = mappingItem.merchant_center_variable;
+    const activeKey = contentApiToMerchantApiDictionary[keyForMerchant] || keyForMerchant || '';
+    const activeKeyPathArray = activeKey.split('.');
+    const usesDotNotation = activeKeyPathArray.length > 1;
+    const productAttributes = resultData.productAttributes || {};
+
+    let value;
+    // Backward compatibility for old Content API fields in the UI.
+    // For the new API, field names are mutually exclusive. If not using dot notation, check productAttributes first, and if the attribute is not found, check the top-level resultData.
+    if (!usesDotNotation) {
+      value =
+        getType(productAttributes[activeKey]) !== 'undefined'
+          ? productAttributes[activeKey]
+          : resultData[activeKey];
+    } else {
+      value = getNestedValue(resultData, activeKeyPathArray);
+    }
+
+    if (
+      (keyForMerchant === 'gtin' /* Backward compatibility */ ||
+        keyForMerchant ===
+          'gtins') /* New API, but we still return only one element of the array */ &&
+      getType(value) === 'array'
+    ) {
+      value = value[0];
+    }
+
+    const keyForGAItems = mappingItem.item_variable;
+    if (isValidValue(value)) item[keyForGAItems] = value;
+  });
+
+  return item;
 }
 
 /*==============================================================================
@@ -404,6 +466,17 @@ function mapResultVariables(item, result_data, mapping) {
 function enc(data) {
   if (['null', 'undefined'].indexOf(getType(data)) !== -1) data = '';
   return encodeUriComponent(makeString(data));
+}
+
+function isValidValue(value) {
+  const valueType = getType(value);
+  return valueType !== 'null' && valueType !== 'undefined' && value !== '' && value === value;
+}
+
+function getNestedValue(obj, pathArray) {
+  return pathArray.reduce((acc, key) => {
+    return getType(acc) !== 'undefined' && getType(acc) !== 'null' ? acc[key] : undefined;
+  }, obj);
 }
 
 
@@ -441,7 +514,7 @@ ___SERVER_PERMISSIONS___
             "listItem": [
               {
                 "type": 1,
-                "string": "https://shoppingcontent.googleapis.com/*"
+                "string": "https://merchantapi.googleapis.com/*"
               }
             ]
           }
@@ -485,6 +558,39 @@ ___SERVER_PERMISSIONS___
       "isEditedByUser": true
     },
     "isRequired": true
+  },
+  {
+    "instance": {
+      "key": {
+        "publicId": "read_event_data",
+        "versionId": "1"
+      },
+      "param": [
+        {
+          "key": "keyPatterns",
+          "value": {
+            "type": 2,
+            "listItem": [
+              {
+                "type": 1,
+                "string": "items"
+              }
+            ]
+          }
+        },
+        {
+          "key": "eventDataAccess",
+          "value": {
+            "type": 1,
+            "string": "specific"
+          }
+        }
+      ]
+    },
+    "clientAnnotations": {
+      "isEditedByUser": true
+    },
+    "isRequired": true
   }
 ]
 
@@ -502,21 +608,28 @@ scenarios:
     assertApi('sendHttpRequest').wasNotCalled();
 - name: '[Request URL] Request URL contains required fields (when NOT using a Custom
     ID Key)'
-  code: "runCode(mockData).then(variableResult => {\n  mockData.items.forEach(item\
-    \ => {\n    assertApi('sendHttpRequest').wasCalledWith(\n      'https://shoppingcontent.googleapis.com/content/v2.1/'\
-    \ + \n      enc(mockData.merchant_center_id) + \n      '/products/online:' + \n\
-    \      enc(mockData.feed_language) + \n      ':' + \n      enc(mockData.feed_label)\
-    \ + \n      ':' + \n      enc(item.item_id), \n      { method: 'GET', authorization:\
-    \ 'expectedGoogleAuth' }\n    );\n  });\n});\n"
+  code: "\nrunCode(mockData).then(variableResult => {\n mockData.items.forEach(item\
+    \ => {\n   const productStringPath = mockData.feed_language + '~' + mockData.feed_label\
+    \ + '~' + item.item_id;\n   const productPath = ['accounts', enc(mockData.merchant_center_id),\
+    \ 'products', enc(productStringPath)].join('/');\n   const expectedUrl = 'https://merchantapi.googleapis.com/products/v1/'\
+    \ + productPath;\n   \n   assertApi('sendHttpRequest').wasCalledWith(\n    expectedUrl,\
+    \ \n    { method: 'GET', authorization: 'expectedGoogleAuth' }\n    );\n   });\n\
+    \ });"
 - name: '[Request URL] Request URL contains required fields (when using a Custom ID
     Key)'
   code: "mockData.itemIdKey = 'item_sku';\n\nrunCode(mockData).then(variableResult\
-    \ => {\n  mockData.items.forEach(item => {\n  assertApi('sendHttpRequest').wasCalledWith(\n\
-    \    'https://shoppingcontent.googleapis.com/content/v2.1/' + \n    enc(mockData.merchant_center_id)\
-    \ + \n    '/products/online:' + \n    enc(mockData.feed_language) + \n    ':'\
-    \ + \n    enc(mockData.feed_label) + \n    ':' + \n    enc(item[mockData.itemIdKey]),\
-    \ \n    { method: 'GET', authorization: 'expectedGoogleAuth' }\n    );\n  });\n\
-    });\n\n"
+    \ => {\n  mockData.items.forEach(item => {\n   let productStringPath = mockData.feed_language\
+    \ + '~' + mockData.feed_label + '~' + item[mockData.itemIdKey];\n   let productPath\
+    \ = ['accounts', enc(mockData.merchant_center_id), 'products', enc(productStringPath)].join('/');\n\
+    \   let expectedUrl = 'https://merchantapi.googleapis.com/products/v1/' + productPath;\n\
+    \ \n  assertApi('sendHttpRequest').wasCalledWith(\n   expectedUrl, \n   { method:\
+    \ 'GET', authorization: 'expectedGoogleAuth' }\n   );\n  });\n});\n"
+- name: '[Request URL] Encodes product path when Item ID contains special characters'
+  code: "mockData.feed_label= 'US';\nmockData.items = [{ item_id: 'sku/123', price:\
+    \ 10 }];\n        \nrunCode(mockData).then(variableResult => {\n  assertApi('toBase64').wasCalledWith('en~US~sku/123',{urlEncoding:\
+    \ true });\n\n  const expectedUrl = 'https://merchantapi.googleapis.com/products/v1/accounts/1111111111/products/ZW5-VVN-c2t1LzEyMw';\n\
+    \        \n  assertApi('sendHttpRequest').wasCalledWith(expectedUrl, \n      \
+    \    { method: 'GET', authorization: 'expectedGoogleAuth' }\n  );\n});"
 - name: '[Field Mapping] Items Array is modified when the Item ID matches the Item
     ID in Merchant Center (when NOT using a Custom Item ID Key)'
   code: "mockData.map_categories = true;\nmockData.mapping_basic = [ { merchant_center_variable\
@@ -741,6 +854,114 @@ scenarios:
     runCode(mockData).then(() => {
       assertApi('sendHttpRequest').wasCalled();
     });
+- name: '[Field Mapping] Dot notation resolves nested value and array element by numeric
+    key'
+  code: |-
+    mockData.items = [{ item_id: '123', price: 1 }];
+    mockData.mapping_custom = [
+      { merchant_center_variable: 'productAttributes.brand', item_variable: 'brand' },
+      { merchant_center_variable: 'productAttributes.gtins.0', item_variable: 'gtin_direct' }
+    ];
+
+    mock('sendHttpRequest', () => {
+      return Promise.create((resolve) => {
+        resolve({
+          statusCode: 200,
+          body: JSON.stringify({ productAttributes: { brand: 'TestBrand', gtins: ['12345', '67890'] } })
+        });
+      });
+    });
+
+    runCode(mockData).then((variableResult) => {
+      assertThat(variableResult[0].brand).isEqualTo('TestBrand');
+      assertThat(variableResult[0].gtin_direct).isEqualTo('12345');
+    });
+- name: '[Field Mapping] Dot notation returns undefined when path does not exist or
+    has null midway'
+  code: |-
+    mockData.items = [{ item_id: '123', price: 1 }];
+    mockData.mapping_custom = [
+      { merchant_center_variable: 'productAttributes.nonExistent.deep', item_variable: 'missing_field' },
+      { merchant_center_variable: 'productAttributes.brand.sub', item_variable: 'null_midway_field' }
+    ];
+
+    mock('sendHttpRequest', () => {
+      return Promise.create((resolve) => {
+        resolve({
+          statusCode: 200,
+          body: JSON.stringify({ productAttributes: { brand: null } })
+        });
+      });
+    });
+
+    runCode(mockData).then((variableResult) => {
+      assertThat(variableResult[0].missing_field).isUndefined();
+      assertThat(variableResult[0].null_midway_field).isUndefined();
+    });
+- name: '[Field Mapping] id key is remapped to name via backward compat dictionary'
+  code: |-
+    mockData.items = [{ item_id: '123', price: 1 }];
+    mockData.mapping_custom = [
+      { merchant_center_variable: 'id', item_variable: 'product_name' }
+    ];
+
+    mock('sendHttpRequest', () => {
+      return Promise.create((resolve) => {
+        resolve({
+          statusCode: 200,
+          body: JSON.stringify({ name: 'accounts/123/products/sku1' })
+        });
+      });
+    });
+
+    runCode(mockData).then((variableResult) => {
+      assertThat(variableResult[0].product_name).isEqualTo('accounts/123/products/sku1');
+    });
+- name: '[Field Mapping] gtins key unwraps array and returns first element'
+  code: |-
+    mockData.items = [{ item_id: '123', price: 1 }];
+    mockData.mapping_basic = [
+      { merchant_center_variable: 'gtins', item_variable: 'item_gtin' }
+    ];
+
+    mock('sendHttpRequest', () => {
+      return Promise.create((resolve) => {
+        resolve({
+          statusCode: 200,
+          body: JSON.stringify({ productAttributes: { gtins: ['111', '222'] } })
+        });
+      });
+    });
+
+    runCode(mockData).then((variableResult) => {
+      assertThat(variableResult[0].item_gtin).isEqualTo('111');
+    });
+- name: '[Field Mapping] Non dot notation prefers productAttributes value and falls
+    back to top-level resultData'
+  code: |-
+    mockData.items = [{ item_id: '123', price: 1 }];
+    mockData.mapping_custom = [
+      { merchant_center_variable: 'brand', item_variable: 'brand_field' },
+      { merchant_center_variable: 'feedLabel', item_variable: 'feed_label_val' }
+    ];
+
+    mock('sendHttpRequest', () => {
+      return Promise.create((resolve) => {
+        resolve({
+          statusCode: 200,
+          body: JSON.stringify({
+            feedLabel: 'US',
+            brand: 'TopLevel',
+            productAttributes: { brand: 'Nested' }
+          })
+        });
+      });
+    });
+
+    runCode(mockData).then((variableResult) => {
+      assertThat(variableResult[0].brand_field).isEqualTo('Nested');
+      assertThat(variableResult[0].feed_label_val).isEqualTo('US');
+    });
 setup: "const encodeUriComponent = require('encodeUriComponent');\nconst Promise =\
   \ require('Promise');\nconst JSON = require('JSON');\n\nconst enc = (data) => {\n\
   \  return encodeUriComponent(data || '');\n};\n\nconst mockData = {\n  items: [\n\
@@ -780,6 +1001,9 @@ setup: "const encodeUriComponent = require('encodeUriComponent');\nconst Promise
 
 
 ___NOTES___
+
+2026-06-25 Change Notes:
+ - Update to new Merchant Center API. Follow the required migration steps https://github.com/stape-io/merchant-center-variable#migrating-from-content-api-for-shopping-to-merchant-api.
 
 2026-05-21 Change Notes:
  - Console and BigQuery logging removal.
