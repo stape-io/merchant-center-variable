@@ -17,13 +17,11 @@ The template uses the [**Merchant API**](https://developers.google.com/merchant/
     <summary>⬇️ Click to expand ⬇️</summary>
     <br/>
 
-1. **Enable the Merchant API in the GCP Project and register your GCP Project with the Merchant Center account.**
+1. **Run the following commands from a terminal or [Cloud Shell](https://console.cloud.google.com/welcome?cloudshell=true) on your GCP Project to enable the Merchant API in the GCP Project and register your GCP Project with the Merchant Center account.**
    Registration is required by the Merchant API and must be done once per Merchant Center account.
    [Learn more](https://developers.google.com/merchant/api/guides/quickstart/registration).
 
    > **Important:** Perform this registration on your **primary** Merchant Center account only, not on its sub-accounts. A GCP Project can only be linked to one Merchant Center account, but a Merchant Center account can have multiple GCP Projects registered.
-
-   Run the following commands from a terminal or [Cloud Shell](https://console.cloud.google.com/welcome?cloudshell=true) on your GCP Project.
 
    Make sure to replace the `GCP_PROJECT_ID`, `MERCHANT_CENTER_ACCOUNT_ID`, and `SERVICE_ACCOUNT_EMAIL` variables with your actual values.
 
