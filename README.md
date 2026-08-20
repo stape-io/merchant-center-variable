@@ -4,27 +4,23 @@ The **Google Merchant Center Lookup** variable retrieves and enhances product da
 
 It's especially useful for adding product details like categories or attributes when sending data to other systems, such as Google Ads or Google Analytics, through a server-side GTM container.
 
-## Useful resources
+## Merchant API setup
 
-- [Google Merchant Center Lookup variable for Google Tag Manager server container step-by-step guide](https://stape.io/blog/google-merchant-center-lookup-variable-for-google-tag-manager-server-container)
-
-## Migrating from Content API for Shopping to Merchant API
-
-The template uses the [**Merchant API**](https://developers.google.com/merchant/api) starting from June, 2026. If you were previously using a version of this template that used the **Content API for Shopping** (scheduled to be deprecated in August 18, 2026), follow the steps below to migrate.
-
-### Migration steps
+### Configuration Steps
 <details>
     <summary>⬇️ Click to expand ⬇️</summary>
     <br/>
 
-1. **Run the following commands from a terminal or [Cloud Shell](https://console.cloud.google.com/welcome?cloudshell=true) on your GCP Project to enable the Merchant API in the GCP Project and register your GCP Project with the Merchant Center account.**
-   Registration is required by the Merchant API and must be done once per Merchant Center account.
-   [Learn more](https://developers.google.com/merchant/api/guides/quickstart/registration).
+**Run the following commands from a terminal or [Cloud Shell](https://console.cloud.google.com/welcome?cloudshell=true) on your GCP Project to enable the Merchant API in the GCP Project and register your GCP Project with the Merchant Center account.**
 
-   > **Important:** Perform this registration on your **primary** Merchant Center account only, not on its sub-accounts. A GCP Project can only be linked to one Merchant Center account, but a Merchant Center account can have multiple GCP Projects registered.
+Registration is required by the Merchant API and must be done once per Merchant Center account.
+[Learn more](https://developers.google.com/merchant/api/guides/quickstart/registration).
 
-   Make sure to replace the `GCP_PROJECT_ID`, `MERCHANT_CENTER_ACCOUNT_ID`, and `SERVICE_ACCOUNT_EMAIL` variables with your actual values.
+> **Important:** Perform this registration on your **primary** Merchant Center account only, not on its sub-accounts. A GCP Project can only be linked to one Merchant Center account, but a Merchant Center account can have multiple GCP Projects registered.
 
+1. Open terminal or [Cloud Shell](https://console.cloud.google.com/welcome?cloudshell=true) on your GCP Project.
+
+2. Copy the following script into a text editor and replace the `GCP_PROJECT_ID`, `MERCHANT_CENTER_ACCOUNT_ID`, and `SERVICE_ACCOUNT_EMAIL` variables with your actual values.
    > ⚠️ The `SERVICE_ACCOUNT_EMAIL` must belong to a Service Account that has Admin access to the Merchant Center account. You can reuse the existing one (recommended) or create a new Service Account, but ensure it has the necessary permissions.
 
    ```bash
@@ -56,18 +52,30 @@ The template uses the [**Merchant API**](https://developers.google.com/merchant/
      -H "Content-Type: application/json" \
      -d "{}"
 
-   # Expected success response:
-   # {
-   #   "name": "accounts/YOUR_MERCHANT_CENTER_ACCOUNT_ID/developerRegistration",
-   #   "gcpIds": [
-   #     "YOUR_GCP_PROJECT_NUMBER"
-   #   ]
-   # }
+3. After replacing the values, copy the modified version, paste it into the GCP Project Terminal or Cloud Shell, and run it.
+4. If everything was successful, a message like this one should be displayed.
+   ```json
+   {
+      "name": "accounts/YOUR_MERCHANT_CENTER_ACCOUNT_ID/developerRegistration",
+      "gcpIds": [
+        "YOUR_GCP_PROJECT_NUMBER"
+      ]
+   }
    ```
 
-2. **Update the variable template in sGTM and test it**
-3. **Publish the changes**
+5. **Update the variable template in sGTM and test it**
+6. **Publish the changes**
 </details>
+
+## Migrating from Content API for Shopping to Merchant API
+
+The template uses the [**Merchant API**](https://developers.google.com/merchant/api) starting from June, 2026.
+
+If you were previously using a version of this template that used the **Content API for Shopping** (scheduled to be deprecated in August 18, 2026) or if you are configuring the integration from scratch, follow [these steps](https://github.com/stape-io/merchant-center-variable#configuration-steps) to configure the Merchant API.
+
+## Useful resources
+
+- [Google Merchant Center Lookup variable for Google Tag Manager server container step-by-step guide](https://stape.io/blog/google-merchant-center-lookup-variable-for-google-tag-manager-server-container)
 
 ## Open Source
 
